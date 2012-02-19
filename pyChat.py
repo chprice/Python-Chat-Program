@@ -5,10 +5,10 @@ import random
 import functools
 
 #GLOBALS
-conn_array=[]
-secret_array=dict()
-username_array=dict()
-contact_array=dict()
+conn_array=[] #stores open sockets
+secret_array=dict() #key: the open sockets in conn_array, value: integers for encryption
+username_array=dict() #key: the open sockets in conn_array, value: usernames for the connection
+contact_array=dict() #key: ip address as a string, value: [port, username]
 
 HOST=''
 PORT=0
@@ -61,6 +61,8 @@ def refract(binary):
 		master=master+chr(int(binary[x*7:(x+1)*7],2)+0)
 	return master
 
+#I'm not actually sure why this is here. But it's used, so for now it stays.
+#Raises x to the power of y
 def power(x, y):
 	if(y==0):
 		return 1
@@ -71,19 +73,21 @@ def power(x, y):
 		final=final*x
 	return final
 
-
+#Ensures that number is atleast length 4 by adding extra zeros to the front
 def formatNumber(number):
 	temp=str(number)
 	while(len(temp)<4):
 		temp='0'+temp
 	return temp
 
-
+#Sends message through the open socket conn with the encryption key secret
+#It first sends the length of the incoming message, then sends the actual message.
 def netThrow(conn, secret, message):
    conn.send(formatNumber(len(x_encode(message,secret))).encode())
    conn.send(x_encode(message,secret).encode())
    
-
+#Receive and return the message through open socket conn, decrypting using key secret.
+#If the message length begins with - instead of a number, process as a flag and return 1.
 def netCatch(conn, secret):
    data = conn.recv(4)
    if(data.decode()[0]=='-'):
@@ -92,11 +96,13 @@ def netCatch(conn, secret):
    data = conn.recv(int(data.decode()))
    return refract(xcrypt(data.decode(), bin(secret)[2:]))
 
-
+#Process the flag corresponding to number, using open socket conn if necessary
 def processFlag(number, conn=None):
    global statusConnect
    global conn_array
    global secret_array
+   global username_array
+   global contact_array
    t= int(number[1:])
    if(t==1): #disconnect
       if(len(conn_array)==1): #in the event of single connection being left or if we're just a client
@@ -111,13 +117,17 @@ def processFlag(number, conn=None):
               conn_array.remove(conn)
               conn.close()
                
-               
+   if(t==2): #username change
+           name = netCatch(conn, secret_array[conn])
+           username_array[conn] = name
+           contact_array[conn.getpeername()[0]]= [conn.getpeername()[1], name]
+           
 
 
 
 #--------------------------------------------------------------------------
 
-
+#Launches client options window for getting destination hostname and port
 def client_options_window(master):
    global top
    top = Toplevel(master)
@@ -133,7 +143,7 @@ def client_options_window(master):
    go = Button(top, text="Connect", command=client_options_go)
    go.grid(row=2, column=1)
 
-
+#Processes the options entered by the user in the client options window
 def client_options_go():
    global location
    global port
@@ -144,18 +154,12 @@ def client_options_go():
       global PORT
       HOST= location.get()
       PORT= int(port.get())
-      print("We got here ok.") #Start client connection, close previous window. top.destroy()
       top.destroy()
       MyClient().start()
-      
-   else:
-      print("Your ip or port were invalid.")
-      print(location.get())
-      print(port.get())
-      print(int(port.get()))
 
 
-def client_options_sanitation(loc, por): # I should also have something to handle the possibilty of the server not being up.
+#Checks to make sure the port and the destination ip are both valid, launches error windows if there are any issues
+def client_options_sanitation(loc, por): 
    if(not por.isnumeric()):
       error_window(root,"Please input a port number.")
       return False
@@ -168,17 +172,11 @@ def client_options_sanitation(loc, por): # I should also have something to handl
    return True
    
    
-
+#Converts a string with an ip into a list of numbers
 def ip_breakdown(ip):
-	spot=0
-	array=[]
-	for x in range(0,3):
-		t=ip.find(".", spot)
-		array.append(ip[spot:t])
-		spot=t+1
-	array.append(ip[spot:])
-	return array
+	return ip.split(".")
 
+#Checks to make sure every section of the ip is a valid number
 def ip_process(ipArray):
 	for ip in ipArray:
 		if(not ip.isnumeric()):
@@ -191,6 +189,7 @@ def ip_process(ipArray):
 
 #----------------------------------------------------------------------------------------
 
+#Launches server options window for getting port
 def server_options_window(master):
    global top
    top = Toplevel(master)
@@ -202,7 +201,7 @@ def server_options_window(master):
    go = Button(top, text="Launch", command=server_options_go)
    go.grid(row=1, column=1)
 
-
+#Processes the options entered by the user in the server options window
 def server_options_go():
    global port
    global top
@@ -214,14 +213,10 @@ def server_options_go():
       PORT= int(port.get())
       top.destroy()
       MyServer().start()
-      
-   else:
-      print("Your ip or port were invalid.")
-      print(port.get())
-      print(int(port.get()))
 
+#Checks to make sure the port is valid, launches error windows if there are any issues
 def server_options_sanitation(por):
-   if(not por.isnumeric()): #if port is not pure number
+   if(not por.isnumeric()):
       error_window(root,"Please input a number.")
       return False
    if(int(por)<0 or 65555<int(por)):
@@ -231,6 +226,7 @@ def server_options_sanitation(por):
 
 #----------------------------------------------------------------------------------------
 
+#Launches a new window to display the message texty
 def error_window(master, texty):
    window = Toplevel(master)
    window.title("ERROR")
@@ -240,7 +236,7 @@ def error_window(master, texty):
 
 
 #----------------------------------------------------------------------------------------
-#Friends window
+#Contacts window
 
 def contacts_window(master):
         global contact_array
@@ -421,7 +417,6 @@ def ClientRunner (conn, secret):
 
 
 def ServerRunner(conn, secret):
-        print("Server runner entered")
         global conn_array
         global secret_array
         global username_array
@@ -535,3 +530,5 @@ load_contacts()
 #------------------------------------------------------------#
 
 root.mainloop()
+
+#dump contacts
