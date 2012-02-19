@@ -1,0 +1,537 @@
+from tkinter import *
+import threading
+import socket
+import random
+import functools
+
+#GLOBALS
+conn_array=[]
+secret_array=dict()
+username_array=dict()
+contact_array=dict()
+
+HOST=''
+PORT=0
+
+location=0
+port=0
+top=""
+
+main_body_text= 0
+#-GLOBALS-
+
+###So,
+   #  x_encode your message with the key, then pass that to
+   #  refract to get a string out of it.
+   # To decrypt, pass the message back to x_encode, and then back to refract
+
+
+#converts the string into binary
+def binWord(word):
+	master=""
+	for letter in word:
+		temp=bin(ord(letter))[2:]
+		while(len(temp)<7):
+			temp='0'+temp
+		master=master+temp
+	return master
+
+
+#encrypts the binary message by the binary key
+def xcrypt(message, key):
+	count=0
+	master=""
+	for letter in message:
+		if(count==len(key)):
+			count=0
+		master=master+str(int(letter) ^ int(key[count]))
+		count=count+1
+	return master
+
+
+#Encrypts the string by the number
+def x_encode(string, number):
+	return xcrypt(binWord(string), bin(number)[2:])
+
+
+#Returns the string representation of the binary (has trouble with spaces)
+def refract(binary):
+	master=""
+	for x in range(0, int(len(binary)/7)):
+		master=master+chr(int(binary[x*7:(x+1)*7],2)+0)
+	return master
+
+def power(x, y):
+	if(y==0):
+		return 1
+	if(y==1):
+		return x
+	final=1
+	for n in range(0,y):
+		final=final*x
+	return final
+
+
+def formatNumber(number):
+	temp=str(number)
+	while(len(temp)<4):
+		temp='0'+temp
+	return temp
+
+
+def netThrow(conn, secret, message):
+   conn.send(formatNumber(len(x_encode(message,secret))).encode())
+   conn.send(x_encode(message,secret).encode())
+   
+
+def netCatch(conn, secret):
+   data = conn.recv(4)
+   if(data.decode()[0]=='-'):
+      processFlag(data.decode(), conn)
+      return 1
+   data = conn.recv(int(data.decode()))
+   return refract(xcrypt(data.decode(), bin(secret)[2:]))
+
+
+def processFlag(number, conn=None):
+   global statusConnect
+   global conn_array
+   global secret_array
+   t= int(number[1:])
+   if(t==1): #disconnect
+      if(len(conn_array)==1): #in the event of single connection being left or if we're just a client
+              writeToScreen("Connection closed.","System")
+              dump=secret_array.pop(conn_array[0])
+              dump=conn_array.pop()
+              dump.close()
+              statusConnect.set("Connect")
+      if(conn!=None):
+              writeToScreen("Connect to " + conn.getsockname()[0] + " closed.", "System")
+              dump=secret_array.pop(conn)
+              conn_array.remove(conn)
+              conn.close()
+               
+               
+
+
+
+#--------------------------------------------------------------------------
+
+
+def client_options_window(master):
+   global top
+   top = Toplevel(master)
+   top.title("Connection options")
+   Label(top, text="Server IP:").grid(row=0)
+   global location
+   location = Entry(top)
+   location.grid(row=0, column=1)
+   Label(top, text="Port:").grid(row=1)
+   global port
+   port = Entry(top)
+   port.grid(row=1, column=1)
+   go = Button(top, text="Connect", command=client_options_go)
+   go.grid(row=2, column=1)
+
+
+def client_options_go():
+   global location
+   global port
+   global top
+   check = client_options_sanitation(location.get(), port.get())
+   if(check):
+      global HOST
+      global PORT
+      HOST= location.get()
+      PORT= int(port.get())
+      print("We got here ok.") #Start client connection, close previous window. top.destroy()
+      top.destroy()
+      MyClient().start()
+      
+   else:
+      print("Your ip or port were invalid.")
+      print(location.get())
+      print(port.get())
+      print(int(port.get()))
+
+
+def client_options_sanitation(loc, por): # I should also have something to handle the possibilty of the server not being up.
+   if(not por.isnumeric()):
+      error_window(root,"Please input a port number.")
+      return False
+   if(int(por)<0 or 65555<int(por)):
+      error_window(root,"Please input a port number between 0 and 65555")
+      return False
+   if(not ip_process(ip_breakdown(loc))):
+      error_window(root,"Please input a valid ip address.")
+      return False
+   return True
+   
+   
+
+def ip_breakdown(ip):
+	spot=0
+	array=[]
+	for x in range(0,3):
+		t=ip.find(".", spot)
+		array.append(ip[spot:t])
+		spot=t+1
+	array.append(ip[spot:])
+	return array
+
+def ip_process(ipArray):
+	for ip in ipArray:
+		if(not ip.isnumeric()):
+			return False
+		t=int(ip)
+		if(t<0 or 255<t):
+			return False
+	return True
+   
+
+#----------------------------------------------------------------------------------------
+
+def server_options_window(master):
+   global top
+   top = Toplevel(master)
+   top.title("Connection options")
+   Label(top, text="Port:").grid(row=0)
+   global port
+   port = Entry(top)
+   port.grid(row=0, column=1)
+   go = Button(top, text="Launch", command=server_options_go)
+   go.grid(row=1, column=1)
+
+
+def server_options_go():
+   global port
+   global top
+   check = server_options_sanitation(port.get())
+   if(check):
+      global PORT
+      global HOST
+      HOST = ''
+      PORT= int(port.get())
+      top.destroy()
+      MyServer().start()
+      
+   else:
+      print("Your ip or port were invalid.")
+      print(port.get())
+      print(int(port.get()))
+
+def server_options_sanitation(por):
+   if(not por.isnumeric()): #if port is not pure number
+      error_window(root,"Please input a number.")
+      return False
+   if(int(por)<0 or 65555<int(por)):
+      error_window(root,"Please input a port number between 0 and 65555.")
+      return False
+   return True
+
+#----------------------------------------------------------------------------------------
+
+def error_window(master, texty):
+   window = Toplevel(master)
+   window.title("ERROR")
+   Label(window, text=texty).pack()
+   go = Button(window, text="OK", command=window.destroy)
+   go.pack()
+
+
+#----------------------------------------------------------------------------------------
+#Friends window
+
+def contacts_window(master):
+        global contact_array
+        cWindow = Toplevel(master)
+        cWindow.title("Contacts")
+        scrollbar = Scrollbar(cWindow, orient=VERTICAL)
+        listbox = Listbox(cWindow, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=listbox.yview)
+        scrollbar.pack(side=RIGHT, fill=Y)
+        for person in contact_array:
+                listbox.insert(END, contact_array[person][1]+" "+person+" "+contact_array[person][0])
+        listbox.pack(side=LEFT, fill=BOTH, expand=1)
+        listbox.insert(END, "Test")
+        
+        
+def load_contacts():
+        global contact_array
+        try:
+                filehandle = open("contacts.dat", "r")
+        except IOError:
+                return
+        line= filehandle.readline()
+        while(len(line)!=0):
+                temp = (line.rstrip('\n')).split(" ") #format: ip, port, name
+                contact_array[temp[0]]=temp[1:]
+                line= filehandle.readline()
+        filehandle.close()
+
+def dump_contacts():
+        global contact_array
+        try:
+                filehandle = open("contacts.dat", "w")
+        except IOError:
+                print("Can't dump contacts.")
+                return
+        for contact in contact_array:
+                filehandle.write(contact+" "+contact_array[contact][0]+" "+contact_array[contact][1]+"\n")
+        filehandle.close()
+
+
+#----------------------------------------------------------------------------------------
+
+
+def placeText(event):
+    global conn_array
+    global secret_array
+    writeToScreen(text_input.get(), "Self") #needs to get passed the username for this client
+    for person in conn_array:
+            netThrow(person, secret_array[person], text_input.get())
+    text_input.delete(0,END)
+
+def writeToScreen(text, username):
+        global main_body_text
+        main_body_text.config(state=NORMAL)
+        main_body_text.insert(END, '\n')
+        main_body_text.insert(END, username+": ")
+        main_body_text.insert(END, text)
+        main_body_text.yview(END)
+        main_body_text.config(state=DISABLED)
+        
+
+class MyServer ( threading.Thread ):
+
+   def run ( self ):
+       global PORT
+       global conn_array
+       s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+       s.bind(('', PORT))
+       
+       if(len(conn_array)==0):
+               writeToScreen("Socket is good, waiting for connections on port: "+str(PORT), "System")
+       s.listen(1)
+       global conn_init
+       conn_init, addr_init = s.accept()
+       serv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+       serv.bind(('', 0)) #get a random empty port
+       serv.listen(1)
+       
+       portVal = str(serv.getsockname()[1])
+       if(len(portVal)==5):
+               conn_init.send(portVal.encode())
+       else:
+               conn_init.send(("0"+portVal).encode())
+
+       conn_init.close() 
+       conn, addr = serv.accept()
+       conn_array.append(conn) #add an array entry for this connection
+       writeToScreen("Connected by " + str(addr[0]), "System")
+       
+       global statusConnect
+       statusConnect.set("Disconnect")
+       
+
+       #create the numbers for my encryption
+       prime= random.randint(1000,9000)
+       base= random.randint(20,100)
+       a= random.randint(20,100)
+
+       #send the numbers (base, prime, A)
+       conn.send(formatNumber(len(str(base))).encode())
+       conn.send(str(base).encode())
+
+       conn.send(formatNumber(len(str(prime))).encode())
+       conn.send(str(prime).encode())
+
+       conn.send(formatNumber(len(str(power(base,a)%prime))).encode())
+       conn.send(str(power(base,a)%prime).encode())
+
+       #get B
+       data = conn.recv(4)
+       data = conn.recv(int(data.decode()))
+       b= int(data.decode())
+
+       #calculate the encryption key
+       global secret_array
+       secret = power(b, a) % prime
+       secret_array[conn]=secret #store the encryption key by the connection
+       username_array[conn] = addr[0]
+       threading.Thread(target=ServerRunner, args=(conn, secret)).start()
+       MyServer().start()
+
+
+class MyClient (threading.Thread):
+    def run(self):
+
+        global HOST
+        global PORT
+        global conn_array
+        global secret_array
+        conn_init = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        conn_init.settimeout(5.0)
+        try:
+                conn_init.connect((HOST, PORT))
+        except socket.timeout:
+                writeToScreen("Timeout issue. Host possible not there.", "System")
+                raise SystemExit(0)
+        except socket.error:
+                writeToScreen("Connection issue. Host actively refused connection.", "System")
+                raise SystemExit(0)
+        porta = conn_init.recv(5)
+        porte = int(porta.decode())
+        conn_init.close()
+        conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        conn.connect((HOST,porte))
+        
+        writeToScreen("Connected to: " + HOST +" on port: "+ str(porte), "System")
+        
+        global statusConnect
+        statusConnect.set("Disconnect")
+        
+        conn_array.append(conn)
+        #get my base, prime, and A values
+        data = conn.recv(4)
+        data = conn.recv(int(data.decode()))
+        base = int(data.decode())
+        data = conn.recv(4)
+        data = conn.recv(int(data.decode()))
+        prime = int(data.decode())
+        data = conn.recv(4)
+        data = conn.recv(int(data.decode()))
+        a = int(data.decode())
+        b = random.randint(20,100)
+        #send the B value
+        conn.send(formatNumber(len(str(power(base,b)%prime))).encode())
+        conn.send(str(power(base,b)%prime).encode())
+        secret = power(a,b)%prime
+        secret_array[conn]=secret
+        username_array[conn] = HOST # fix this to take a real username
+        threading.Thread(target=ClientRunner, args=(conn, secret)).start()
+
+
+def ClientRunner (conn, secret):
+        global username_array
+        while(1):
+                data = netCatch(conn,secret)
+                if(data!=1):
+                        writeToScreen(data, username_array[conn])
+
+
+def ServerRunner(conn, secret):
+        print("Server runner entered")
+        global conn_array
+        global secret_array
+        global username_array
+        while(1):
+                data= netCatch(conn,secret)
+                if(data!=1):
+                        writeToScreen(data, username_array[conn])
+                        for connection in conn_array:
+                                if(connection is not conn):
+                                        netThrow(connection, secret_array[connection], data)
+                        
+
+
+
+def QuickClient():
+        global HOST
+        global PORT
+        PORT=9999
+
+def QuickServer():
+        global PORT
+        PORT=9999
+        MyServer().start()
+
+def connects ():
+    global conn_array
+    if(len(conn_array)==0):
+        if(clientType==0):
+           client_options_window(root)
+
+        if(clientType==1):
+            server_options_window(root)
+    else:
+       for connection in conn_array: 
+               connection.send("-001".encode())
+       processFlag("-001")
+
+        
+    
+def toOne():
+    global clientType
+    clientType=0
+def toTwo():
+    global clientType
+    clientType=1
+        
+
+root = Tk()
+root.title("Chat")
+
+def dummy():
+        print("Write this function")
+
+def dummer(push):
+        print("Nooo!")
+
+menubar = Menu(root)
+
+file_menu= Menu(menubar, tearoff=0)
+file_menu.add_command(label="Save chat", command=lambda: dummer(1)) #####
+file_menu.add_command(label="Change username", command=lambda: dummer(2)) #####
+file_menu.add_command(label="Exit", command=lambda: dummer(3)) #####
+menubar.add_cascade(label="File", menu=file_menu)
+
+connection_menu = Menu(menubar, tearoff=0)
+connection_menu.add_command(label="Quick Connect", command=dummy) #####
+connection_menu.add_command(label="Connect on port", command=lambda:client_options_window(root) )
+connection_menu.add_command(label="Disconnect", command=lambda: processFlag("-001"))
+menubar.add_cascade(label="Connect", menu=connection_menu)
+
+server_menu = Menu(menubar, tearoff=0)
+server_menu.add_command(label="Launch server", command=QuickServer)
+server_menu.add_command(label="Listen on port", command=lambda: server_options_window(root))
+server_menu.add_command(label="Kick user", command=dummy) #####
+menubar.add_cascade(label="Server", menu=server_menu)
+
+menubar.add_command(label="Contacts", command=lambda:contacts_window(root))
+
+root.config(menu=menubar)
+
+main_body = Frame(root, height=20, width=50)
+
+main_body_text = Text(main_body)
+body_text_scroll = Scrollbar(main_body)
+main_body_text.focus_set()
+body_text_scroll.pack(side=RIGHT, fill=Y)
+main_body_text.pack(side=LEFT, fill=Y)
+body_text_scroll.config(command=main_body_text.yview)
+main_body_text.config(yscrollcommand=body_text_scroll.set)
+main_body.pack()
+
+main_body_text.insert(END, "Welcome to the chat program!")
+main_body_text.config(state=DISABLED)
+
+text_input = Entry(root, width=60 )
+text_input.bind("<Return>",placeText)
+text_input.pack()
+
+statusConnect= StringVar()
+statusConnect.set("Connect")
+clientType= 1
+Radiobutton(root, text="Client", variable= clientType, value=0, command=toOne).pack(anchor=E)
+Radiobutton(root, text="Server", variable= clientType, value=1, command=toTwo).pack(anchor=E)
+connecter = Button(root, textvariable=statusConnect, command= connects)
+connecter.pack()
+
+#MyServer().start()
+
+load_contacts()
+
+#------------------------------------------------------------#
+
+root.mainloop()
