@@ -10,6 +10,8 @@ secret_array=dict() #key: the open sockets in conn_array, value: integers for en
 username_array=dict() #key: the open sockets in conn_array, value: usernames for the connection
 contact_array=dict() #key: ip address as a string, value: [port, username]
 
+username = "Self"
+
 HOST=''
 PORT=0
 
@@ -119,10 +121,40 @@ def processFlag(number, conn=None):
                
    if(t==2): #username change
            name = netCatch(conn, secret_array[conn])
-           username_array[conn] = name
-           contact_array[conn.getpeername()[0]]= [conn.getpeername()[1], name]
+           if(isUsernameFree(name)):
+                   username_array[conn] = name
+                   contact_array[conn.getpeername()[0]]= [conn.getpeername()[1], name]
+           else:
+                   conn.send("-003".encode())
+
+   if(t==3): #username already taken OR username requested is the IP of another connection, pick another one
+           global username
+           username = "Self"
+           writeToScreen("Username is already taken, please choose another.", "System")
+           
            
 
+
+def processUserCommands(command, param):
+        global conn_array
+        global secret_array
+        global username
+        if(command == "nick"):
+                print("Nick is trying to be changed")
+                for conn in conn_array:
+                        conn.send("-002".encode())
+                        netThrow(conn, secret_array[conn], param[0])
+                username = param[0]
+        if(command == "disconnect"):
+                processFlag("001")
+           
+
+def isUsernameFree(name):
+        global username_array
+        for conn in username_array:
+               if(name==username_array[conn] or name==conn.getpeername()):
+                       return False
+        return True
 
 
 #--------------------------------------------------------------------------
@@ -155,7 +187,7 @@ def client_options_go():
       HOST= location.get()
       PORT= int(port.get())
       top.destroy()
-      MyClient().start()
+      Client().start()
 
 
 #Checks to make sure the port and the destination ip are both valid, launches error windows if there are any issues
@@ -212,7 +244,7 @@ def server_options_go():
       HOST = ''
       PORT= int(port.get())
       top.destroy()
-      MyServer().start()
+      Server().start()
 
 #Checks to make sure the port is valid, launches error windows if there are any issues
 def server_options_sanitation(por):
@@ -238,6 +270,7 @@ def error_window(master, texty):
 #----------------------------------------------------------------------------------------
 #Contacts window
 
+#Displays the contacts window, allowing the user to select a recent connection to reuse
 def contacts_window(master):
         global contact_array
         cWindow = Toplevel(master)
@@ -251,7 +284,8 @@ def contacts_window(master):
         listbox.pack(side=LEFT, fill=BOTH, expand=1)
         listbox.insert(END, "Test")
         
-        
+
+#Loads the recent chats out of the persistant file contacts.dat
 def load_contacts():
         global contact_array
         try:
@@ -265,6 +299,7 @@ def load_contacts():
                 line= filehandle.readline()
         filehandle.close()
 
+#Saves the recent chats to the persistant file contacts.dat
 def dump_contacts():
         global contact_array
         try:
@@ -279,15 +314,16 @@ def dump_contacts():
 
 #----------------------------------------------------------------------------------------
 
-
-def placeText(event):
+#places the text from the text bar on to the screen and sends it to everyone this program is connected to
+def placeText(text):
     global conn_array
     global secret_array
-    writeToScreen(text_input.get(), "Self") #needs to get passed the username for this client
+    global username
+    writeToScreen(text, username)
     for person in conn_array:
-            netThrow(person, secret_array[person], text_input.get())
-    text_input.delete(0,END)
+            netThrow(person, secret_array[person], text)
 
+#places text to main text body in format "username: text"
 def writeToScreen(text, username):
         global main_body_text
         main_body_text.config(state=NORMAL)
@@ -296,9 +332,24 @@ def writeToScreen(text, username):
         main_body_text.insert(END, text)
         main_body_text.yview(END)
         main_body_text.config(state=DISABLED)
-        
 
-class MyServer ( threading.Thread ):
+def processUserText(event):
+        data = text_input.get()
+        if(data[0]!="/"): #is not a command
+                placeText(data)
+        else: 
+                command = data[1:data.find(" ")]
+                params = data[data.find(" ")+1:].split(" ")
+                processUserCommands(command, params)
+        text_input.delete(0,END)
+                
+                
+
+
+#----------------------------------------------------------------------------------------
+#Server
+
+class Server ( threading.Thread ):
 
    def run ( self ):
        global PORT
@@ -356,10 +407,10 @@ class MyServer ( threading.Thread ):
        secret_array[conn]=secret #store the encryption key by the connection
        username_array[conn] = addr[0]
        threading.Thread(target=ServerRunner, args=(conn, secret)).start()
-       MyServer().start()
+       Server().start()
 
 
-class MyClient (threading.Thread):
+class Client (threading.Thread):
     def run(self):
 
         global HOST
@@ -439,7 +490,7 @@ def QuickClient():
 def QuickServer():
         global PORT
         PORT=9999
-        MyServer().start()
+        Server().start()
 
 def connects ():
     global conn_array
@@ -512,7 +563,7 @@ main_body_text.insert(END, "Welcome to the chat program!")
 main_body_text.config(state=DISABLED)
 
 text_input = Entry(root, width=60 )
-text_input.bind("<Return>",placeText)
+text_input.bind("<Return>",processUserText)
 text_input.pack()
 
 statusConnect= StringVar()
@@ -522,8 +573,6 @@ Radiobutton(root, text="Client", variable= clientType, value=0, command=toOne).p
 Radiobutton(root, text="Server", variable= clientType, value=1, command=toTwo).pack(anchor=E)
 connecter = Button(root, textvariable=statusConnect, command= connects)
 connecter.pack()
-
-#MyServer().start()
 
 load_contacts()
 
