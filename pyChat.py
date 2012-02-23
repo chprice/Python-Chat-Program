@@ -98,6 +98,21 @@ def netCatch(conn, secret):
    data = conn.recv(int(data.decode()))
    return refract(xcrypt(data.decode(), bin(secret)[2:]))
 
+
+
+def isPrime(number):
+	""" Checks to see if a number is prime
+
+	"""
+	x=1
+	if(number==2):
+		return True
+	while (x<sqrt(number)):
+		x=x+1
+		if(number%x==0):
+			return False
+	return True
+
 #Process the flag corresponding to number, using open socket conn if necessary
 def processFlag(number, conn=None):
    global statusConnect
@@ -146,24 +161,24 @@ def processUserCommands(command, param):
         global HOST
         global PORT
         
-        if(command == "nick"):
+        if(command == "nick"): #change nickname
                 writeToScreen("Username is being changed to "+param[0], "System")
                 for conn in conn_array:
                         conn.send("-002".encode())
                         netThrow(conn, secret_array[conn], param[0])
                 username = param[0]
-        if(command == "disconnect"):
+        if(command == "disconnect"): #disconnects from current connection
                 for conn in conn_array:
                         conn.send("-001".encode())
                 processFlag("-001")
-        if(command == "connect"):
+        if(command == "connect"): #connects to passed in host port
                 HOST = param[0]
                 PORT = int(param[1])
                 Client().start()
                 
         if(command == "kick"):
                 print("kick")
-        if(command == "host"):
+        if(command == "host"): #starts server on passed in port
                 PORT = int(param[0])
                 Server().start()
                 
@@ -345,11 +360,12 @@ def placeText(text):
             netThrow(person, secret_array[person], text)
 
 #places text to main text body in format "username: text"
-def writeToScreen(text, username):
+def writeToScreen(text, username=""):
         global main_body_text
         main_body_text.config(state=NORMAL)
         main_body_text.insert(END, '\n')
-        main_body_text.insert(END, username+": ")
+        if(username!=""):
+                main_body_text.insert(END, username+": ")
         main_body_text.insert(END, text)
         main_body_text.yview(END)
         main_body_text.config(state=DISABLED)
@@ -408,6 +424,8 @@ class Server ( threading.Thread ):
 
        #create the numbers for my encryption
        prime= random.randint(1000,9000)
+       while(!isPrime(prime)):
+               prime = random.randint(1000,9000)
        base= random.randint(20,100)
        a= random.randint(20,100)
 
@@ -480,7 +498,7 @@ class Client (threading.Thread):
         conn.send(str(power(base,b)%prime).encode())
         secret = power(a,b)%prime
         secret_array[conn]=secret
-        username_array[conn] = HOST # fix this to take a real username
+        username_array[conn] = HOST
         threading.Thread(target=ClientRunner, args=(conn, secret)).start()
 
 
@@ -489,7 +507,7 @@ def ClientRunner (conn, secret):
         while(1):
                 data = netCatch(conn,secret)
                 if(data!=1):
-                        writeToScreen(data, username_array[conn])
+                        writeToScreen(data)
 
 
 def ServerRunner(conn, secret):
@@ -502,11 +520,8 @@ def ServerRunner(conn, secret):
                         writeToScreen(data, username_array[conn])
                         for connection in conn_array:
                                 if(connection is not conn):
-                                        netThrow(connection, secret_array[connection], data)
+                                        netThrow(connection, secret_array[connection], username_array[conn]+": "+data)
                         
-
-
-
 def QuickClient():
         global HOST
         global PORT
