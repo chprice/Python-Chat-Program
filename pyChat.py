@@ -3,6 +3,7 @@ import threading
 import socket
 import random
 import functools
+import math
 
 #GLOBALS
 conn_array=[] #stores open sockets
@@ -101,13 +102,10 @@ def netCatch(conn, secret):
 
 
 def isPrime(number):
-	""" Checks to see if a number is prime
-
-	"""
 	x=1
 	if(number==2):
 		return True
-	while (x<sqrt(number)):
+	while (x<math.sqrt(number)):
 		x=x+1
 		if(number%x==0):
 			return False
@@ -424,8 +422,9 @@ class Server ( threading.Thread ):
 
        #create the numbers for my encryption
        prime= random.randint(1000,9000)
-       while(!isPrime(prime)):
+       while(not isPrime(prime)):
                prime = random.randint(1000,9000)
+       print(prime, isPrime(prime)) 
        base= random.randint(20,100)
        a= random.randint(20,100)
 
