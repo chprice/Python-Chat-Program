@@ -122,6 +122,7 @@ def processFlag(number, conn=None):
    if(t==2): #username change
            name = netCatch(conn, secret_array[conn])
            if(isUsernameFree(name)):
+                   writeToScreen("User "+username_array[conn]+" has changed their username to "+name, "System")
                    username_array[conn] = name
                    contact_array[conn.getpeername()[0]]= [conn.getpeername()[1], name]
            else:
@@ -131,28 +132,48 @@ def processFlag(number, conn=None):
            global username
            username = "Self"
            writeToScreen("Username is already taken, please choose another.", "System")
+           for conn in conn_array:
+                   conn.send("-002".encode())
+                   netThrow(conn, secret_array[conn], conn.getpeername()[0])
            
            
 
-
+#processes commands passed in via the / text input
 def processUserCommands(command, param):
         global conn_array
         global secret_array
         global username
+        global HOST
+        global PORT
+        
         if(command == "nick"):
-                print("Nick is trying to be changed")
+                writeToScreen("Username is being changed to "+param[0], "System")
                 for conn in conn_array:
                         conn.send("-002".encode())
                         netThrow(conn, secret_array[conn], param[0])
                 username = param[0]
         if(command == "disconnect"):
-                processFlag("001")
+                for conn in conn_array:
+                        conn.send("-001".encode())
+                processFlag("-001")
+        if(command == "connect"):
+                HOST = param[0]
+                PORT = int(param[1])
+                Client().start()
+                
+        if(command == "kick"):
+                print("kick")
+        if(command == "host"):
+                PORT = int(param[0])
+                Server().start()
+                
            
-
+#checks to see if the username name is free for use
 def isUsernameFree(name):
         global username_array
+        global username
         for conn in username_array:
-               if(name==username_array[conn] or name==conn.getpeername()):
+               if(name==username_array[conn] or name==username):# or name==conn.getpeername()[0]):
                        return False
         return True
 
@@ -333,12 +354,16 @@ def writeToScreen(text, username):
         main_body_text.yview(END)
         main_body_text.config(state=DISABLED)
 
+#takes text from text bar input, and calls processUserCommands if it begins with /
 def processUserText(event):
         data = text_input.get()
         if(data[0]!="/"): #is not a command
                 placeText(data)
         else: 
-                command = data[1:data.find(" ")]
+                if(data.find(" ")==-1):
+                        command = data[1:]
+                else:
+                        command = data[1:data.find(" ")]
                 params = data[data.find(" ")+1:].split(" ")
                 processUserCommands(command, params)
         text_input.delete(0,END)
