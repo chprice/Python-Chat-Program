@@ -175,7 +175,7 @@ def processUserCommands(command, param):
                 Client().start()
                 
         if(command == "kick"):
-                print("kick")
+                print("I need to figure out a way to make it know what conn to grab based on the username")
         if(command == "host"): #starts server on passed in port
                 PORT = int(param[0])
                 Server().start()
@@ -195,100 +195,78 @@ def isUsernameFree(name):
 
 #Launches client options window for getting destination hostname and port
 def client_options_window(master):
-   global top
    top = Toplevel(master)
    top.title("Connection options")
    Label(top, text="Server IP:").grid(row=0)
-   global location
    location = Entry(top)
    location.grid(row=0, column=1)
    Label(top, text="Port:").grid(row=1)
-   global port
    port = Entry(top)
    port.grid(row=1, column=1)
-   go = Button(top, text="Connect", command=client_options_go)
+   go = Button(top, text="Connect", command=lambda:client_options_go(location.get(), port.get(), top ))
    go.grid(row=2, column=1)
 
 #Processes the options entered by the user in the client options window
-def client_options_go():
-   global location
-   global port
-   global top
-   check = client_options_sanitation(location.get(), port.get())
-   if(check):
+def client_options_go(dest, port, window):
+   if(options_sanitation(port, dest)):
       global HOST
       global PORT
-      HOST= location.get()
-      PORT= int(port.get())
-      top.destroy()
+      HOST= dest
+      PORT= int(port)
+      window.destroy()
       Client().start()
 
 
 #Checks to make sure the port and the destination ip are both valid, launches error windows if there are any issues
-def client_options_sanitation(loc, por): 
+def options_sanitation(por, loc=""): 
    if(not por.isnumeric()):
       error_window(root,"Please input a port number.")
       return False
    if(int(por)<0 or 65555<int(por)):
       error_window(root,"Please input a port number between 0 and 65555")
       return False
-   if(not ip_process(ip_breakdown(loc))):
-      error_window(root,"Please input a valid ip address.")
-      return False
+   if(loc!=""):
+           if(not ip_process(loc.split("."))):
+                   error_window(root,"Please input a valid ip address.")
+                   return False
    return True
    
-   
-#Converts a string with an ip into a list of numbers
-def ip_breakdown(ip):
-	return ip.split(".")
+
 
 #Checks to make sure every section of the ip is a valid number
 def ip_process(ipArray):
-	for ip in ipArray:
-		if(not ip.isnumeric()):
-			return False
-		t=int(ip)
-		if(t<0 or 255<t):
-			return False
-	return True
+        if(len(ipArray)!=4):
+                return False
+        for ip in ipArray:
+                if(not ip.isnumeric()):
+                        return False
+                t=int(ip)
+                if(t<0 or 255<t):
+                        return False
+        return True
    
 
 #----------------------------------------------------------------------------------------
 
 #Launches server options window for getting port
 def server_options_window(master):
-   global top
    top = Toplevel(master)
    top.title("Connection options")
    Label(top, text="Port:").grid(row=0)
-   global port
    port = Entry(top)
    port.grid(row=0, column=1)
-   go = Button(top, text="Launch", command=server_options_go)
+   go = Button(top, text="Launch", command=lambda:server_options_go(port.get(), top))
    go.grid(row=1, column=1)
 
 #Processes the options entered by the user in the server options window
-def server_options_go():
-   global port
-   global top
-   check = server_options_sanitation(port.get())
-   if(check):
+def server_options_go(port, window):
+   if(options_sanitation(port)):
       global PORT
       global HOST
       HOST = ''
-      PORT= int(port.get())
-      top.destroy()
+      PORT= int(port)
+      window.destroy()
       Server().start()
-
-#Checks to make sure the port is valid, launches error windows if there are any issues
-def server_options_sanitation(por):
-   if(not por.isnumeric()):
-      error_window(root,"Please input a number.")
-      return False
-   if(int(por)<0 or 65555<int(por)):
-      error_window(root,"Please input a port number between 0 and 65555.")
-      return False
-   return True
 
 #----------------------------------------------------------------------------------------
 
@@ -323,7 +301,7 @@ def contacts_window(master):
 def load_contacts():
         global contact_array
         try:
-                filehandle = open("contacts.dat", "r")
+                filehandle = open("data\\contacts.dat", "r")
         except IOError:
                 return
         line= filehandle.readline()
@@ -337,7 +315,7 @@ def load_contacts():
 def dump_contacts():
         global contact_array
         try:
-                filehandle = open("contacts.dat", "w")
+                filehandle = open("data\\contacts.dat", "w")
         except IOError:
                 print("Can't dump contacts.")
                 return
@@ -522,9 +500,15 @@ def ServerRunner(conn, secret):
                                         netThrow(connection, secret_array[connection], username_array[conn]+": "+data)
                         
 def QuickClient():
-        global HOST
-        global PORT
-        PORT=9999
+        port="9999"
+        window = Toplevel(root)
+        window.title("Connection options")
+        Label(window, text="Server IP:").grid(row=0)
+        destination = Entry(window)
+        destination.grid(row=0, column=1)
+        go = Button(window, text="Connect", command=lambda: client_options_go(destination.get(), port, window))
+        go.grid(row=1, column=1)
+        
 
 def QuickServer():
         global PORT
@@ -572,7 +556,7 @@ file_menu.add_command(label="Exit", command=lambda: dummer(3)) #####
 menubar.add_cascade(label="File", menu=file_menu)
 
 connection_menu = Menu(menubar, tearoff=0)
-connection_menu.add_command(label="Quick Connect", command=dummy) #####
+connection_menu.add_command(label="Quick Connect", command=QuickClient)
 connection_menu.add_command(label="Connect on port", command=lambda:client_options_window(root) )
 connection_menu.add_command(label="Disconnect", command=lambda: processFlag("-001"))
 menubar.add_cascade(label="Connect", menu=connection_menu)
@@ -619,4 +603,4 @@ load_contacts()
 
 root.mainloop()
 
-#dump contacts
+dump_contacts()
