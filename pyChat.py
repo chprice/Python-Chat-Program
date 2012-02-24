@@ -294,7 +294,6 @@ def contacts_window(master):
         for person in contact_array:
                 listbox.insert(END, contact_array[person][1]+" "+person+" "+contact_array[person][0])
         listbox.pack(side=LEFT, fill=BOTH, expand=1)
-        listbox.insert(END, "Test")
         
 
 #Loads the recent chats out of the persistant file contacts.dat
@@ -426,6 +425,7 @@ class Server ( threading.Thread ):
        secret = power(b, a) % prime
        secret_array[conn]=secret #store the encryption key by the connection
        username_array[conn] = addr[0]
+       contact_array[str(addr[0])]=[str(PORT), "CHANGEME"]
        threading.Thread(target=ServerRunner, args=(conn, secret)).start()
        Server().start()
 
@@ -476,6 +476,7 @@ class Client (threading.Thread):
         secret = power(a,b)%prime
         secret_array[conn]=secret
         username_array[conn] = HOST
+        contact_array[conn.getpeername()[0]]=[str(PORT), "CHANGEME"]
         threading.Thread(target=ClientRunner, args=(conn, secret)).start()
 
 
