@@ -13,9 +13,6 @@ contact_array=dict() #key: ip address as a string, value: [port, username]
 
 username = "Self"
 
-HOST=''
-PORT=0
-
 location=0
 port=0
 top=""
@@ -100,7 +97,7 @@ def netCatch(conn, secret):
    return refract(xcrypt(data.decode(), bin(secret)[2:]))
 
 
-
+#Checks to see if a number is prime
 def isPrime(number):
 	x=1
 	if(number==2):
@@ -148,16 +145,20 @@ def processFlag(number, conn=None):
            for conn in conn_array:
                    conn.send("-002".encode())
                    netThrow(conn, secret_array[conn], conn.getpeername()[0])
+
+   if(t==4): #passing a friend who this should connect to (I am assuming it will be running on the same port as the other session)
+           data = conn.recv(4)
+           data = conn.recv(int(data.decode()))
+           Client(data, int(contact_array[conn.getpeername()[0]][0])).start()
+           
            
            
 
-#processes commands passed in via the / text input
+#processes commands passed in via the / text input #HOLY SHIT PLEASE, ERROR CHECKING
 def processUserCommands(command, param):
         global conn_array
         global secret_array
         global username
-        global HOST
-        global PORT
         
         if(command == "nick"): #change nickname
                 writeToScreen("Username is being changed to "+param[0], "System")
@@ -170,15 +171,12 @@ def processUserCommands(command, param):
                         conn.send("-001".encode())
                 processFlag("-001")
         if(command == "connect"): #connects to passed in host port
-                HOST = param[0]
-                PORT = int(param[1])
-                Client().start()
+                Client(param[0], int(param[1])).start()
                 
         if(command == "kick"):
                 print("I need to figure out a way to make it know what conn to grab based on the username")
         if(command == "host"): #starts server on passed in port
-                PORT = int(param[0])
-                Server().start()
+                Server(int(param[0])).start()
                 
            
 #checks to see if the username name is free for use
@@ -186,10 +184,20 @@ def isUsernameFree(name):
         global username_array
         global username
         for conn in username_array:
-               if(name==username_array[conn] or name==username):# or name==conn.getpeername()[0]):
+               if(name==username_array[conn] or name==username):
                        return False
         return True
 
+
+#sends conn all of the people currently in conn_array so they can connect to them
+def passFriends(conn):
+        global conn_array
+        for connection in conn_array:
+                conn.send("-004".encode())
+                conn.send(formatNumber(len(connection.getpeername()[0])).encode()) #pass the ip address
+                conn.send(connection.getpeername()[0].encode())
+                #conn.send(formatNumber(len(connection.getpeername()[1])).encode()) #pass the port number
+                #conn.send(connection.getpeername()[1].encode())
 
 #--------------------------------------------------------------------------
 
@@ -209,12 +217,8 @@ def client_options_window(master):
 #Processes the options entered by the user in the client options window
 def client_options_go(dest, port, window):
    if(options_sanitation(port, dest)):
-      global HOST
-      global PORT
-      HOST= dest
-      PORT= int(port)
       window.destroy()
-      Client().start()
+      Client(dest, int(port)).start()
 
 
 #Checks to make sure the port and the destination ip are both valid, launches error windows if there are any issues
@@ -261,12 +265,8 @@ def server_options_window(master):
 #Processes the options entered by the user in the server options window
 def server_options_go(port, window):
    if(options_sanitation(port)):
-      global PORT
-      global HOST
-      HOST = ''
-      PORT= int(port)
       window.destroy()
-      Server().start()
+      Server(int(port)).start()
 
 #----------------------------------------------------------------------------------------
 
@@ -366,15 +366,18 @@ def processUserText(event):
 #Server
 
 class Server ( threading.Thread ):
+   def __init__(self, port):
+           threading.Thread.__init__(self)
+           self.port = port
+
 
    def run ( self ):
-       global PORT
        global conn_array
        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-       s.bind(('', PORT))
+       s.bind(('', self.port))
        
        if(len(conn_array)==0):
-               writeToScreen("Socket is good, waiting for connections on port: "+str(PORT), "System")
+               writeToScreen("Socket is good, waiting for connections on port: "+str(self.port), "System")
        s.listen(1)
        global conn_init
        conn_init, addr_init = s.accept()
@@ -395,6 +398,7 @@ class Server ( threading.Thread ):
        
        global statusConnect
        statusConnect.set("Disconnect")
+       
        
 
        #create the numbers for my encryption
@@ -425,22 +429,26 @@ class Server ( threading.Thread ):
        secret = power(b, a) % prime
        secret_array[conn]=secret #store the encryption key by the connection
        username_array[conn] = addr[0]
-       contact_array[str(addr[0])]=[str(PORT), "CHANGEME"]
-       threading.Thread(target=ServerRunner, args=(conn, secret)).start()
-       Server().start()
+       contact_array[str(addr[0])]=[str(self.port), "No nick"]
+       passFriends(conn)
+       threading.Thread(target=Runner, args=(conn, secret)).start()
+       Server(self.port).start()
 
 
 class Client (threading.Thread):
-    def run(self):
 
-        global HOST
-        global PORT
+    def __init__(self, host, port):
+            threading.Thread.__init__(self)
+            self.port = port
+            self.host = host
+
+    def run(self):
         global conn_array
         global secret_array
         conn_init = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conn_init.settimeout(5.0)
         try:
-                conn_init.connect((HOST, PORT))
+                conn_init.connect((self.host, self.port))
         except socket.timeout:
                 writeToScreen("Timeout issue. Host possible not there.", "System")
                 raise SystemExit(0)
@@ -451,9 +459,9 @@ class Client (threading.Thread):
         porte = int(porta.decode())
         conn_init.close()
         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        conn.connect((HOST,porte))
+        conn.connect((self.host,porte))
         
-        writeToScreen("Connected to: " + HOST +" on port: "+ str(porte), "System")
+        writeToScreen("Connected to: " + self.host +" on port: "+ str(porte), "System")
         
         global statusConnect
         statusConnect.set("Disconnect")
@@ -475,53 +483,39 @@ class Client (threading.Thread):
         conn.send(str(power(base,b)%prime).encode())
         secret = power(a,b)%prime
         secret_array[conn]=secret
-        username_array[conn] = HOST
-        contact_array[conn.getpeername()[0]]=[str(PORT), "CHANGEME"]
-        threading.Thread(target=ClientRunner, args=(conn, secret)).start()
+        username_array[conn] = self.host
+        contact_array[conn.getpeername()[0]]=[str(self.port), "No nick"]
+        threading.Thread(target=Runner, args=(conn, secret)).start()
 
 
-def ClientRunner (conn, secret):
+def Runner (conn, secret):
         global username_array
         while(1):
                 data = netCatch(conn,secret)
                 if(data!=1):
-                        writeToScreen(data)
-
-
-def ServerRunner(conn, secret):
-        global conn_array
-        global secret_array
-        global username_array
-        while(1):
-                data= netCatch(conn,secret)
-                if(data!=1):
                         writeToScreen(data, username_array[conn])
-                        for connection in conn_array:
-                                if(connection is not conn):
-                                        netThrow(connection, secret_array[connection], username_array[conn]+": "+data)
+
+#----------------------------------------------------------------------------------------
+#Menu helpers
                         
 def QuickClient():
-        port="9999"
         window = Toplevel(root)
         window.title("Connection options")
         Label(window, text="Server IP:").grid(row=0)
         destination = Entry(window)
         destination.grid(row=0, column=1)
-        go = Button(window, text="Connect", command=lambda: client_options_go(destination.get(), port, window))
+        go = Button(window, text="Connect", command=lambda: client_options_go(destination.get(), "9999", window))
         go.grid(row=1, column=1)
         
 
 def QuickServer():
-        global PORT
-        PORT=9999
-        Server().start()
+        Server(9999).start()
 
-def connects ():
+def connects (clientType):
     global conn_array
     if(len(conn_array)==0):
         if(clientType==0):
            client_options_window(root)
-
         if(clientType==1):
             server_options_window(root)
     else:
@@ -529,15 +523,7 @@ def connects ():
                connection.send("-001".encode())
        processFlag("-001")
 
-        
-    
-def toOne():
-    global clientType
-    clientType=0
-def toTwo():
-    global clientType
-    clientType=1
-        
+#----------------------------------------------------------------------------------------
 
 root = Tk()
 root.title("Chat")
@@ -593,9 +579,9 @@ text_input.pack()
 statusConnect= StringVar()
 statusConnect.set("Connect")
 clientType= 1
-Radiobutton(root, text="Client", variable= clientType, value=0, command=toOne).pack(anchor=E)
-Radiobutton(root, text="Server", variable= clientType, value=1, command=toTwo).pack(anchor=E)
-connecter = Button(root, textvariable=statusConnect, command= connects)
+Radiobutton(root, text="Client", variable= clientType, value=0).pack(anchor=E)
+Radiobutton(root, text="Server", variable= clientType, value=1).pack(anchor=E)
+connecter = Button(root, textvariable=statusConnect, command=lambda: connects(clientType))
 connecter.pack()
 
 load_contacts()
