@@ -83,18 +83,26 @@ def formatNumber(number):
 #Sends message through the open socket conn with the encryption key secret
 #It first sends the length of the incoming message, then sends the actual message.
 def netThrow(conn, secret, message):
-   conn.send(formatNumber(len(x_encode(message,secret))).encode())
-   conn.send(x_encode(message,secret).encode())
+        try:
+                conn.send(formatNumber(len(x_encode(message,secret))).encode())
+                conn.send(x_encode(message,secret).encode())
+        except socket.error:
+                writeToScreen("Connection issue. Sending message failed.", "System")
+                raise SystemExit(0)
    
 #Receive and return the message through open socket conn, decrypting using key secret.
 #If the message length begins with - instead of a number, process as a flag and return 1.
 def netCatch(conn, secret):
-   data = conn.recv(4)
-   if(data.decode()[0]=='-'):
-      processFlag(data.decode(), conn)
-      return 1
-   data = conn.recv(int(data.decode()))
-   return refract(xcrypt(data.decode(), bin(secret)[2:]))
+        try:
+                data = conn.recv(4)
+                if(data.decode()[0]=='-'):
+                        processFlag(data.decode(), conn)
+                        return 1
+                data = conn.recv(int(data.decode()))
+                return refract(xcrypt(data.decode(), bin(secret)[2:]))
+        except socket.error:
+                writeToScreen("Connection issue. Receiving message failed.", "System")
+                raise SystemExit(0)
 
 
 #Checks to see if a number is prime
@@ -123,6 +131,8 @@ def processFlag(number, conn=None):
               dump=conn_array.pop()
               dump.close()
               statusConnect.set("Connect")
+              connecter.config(state=NORMAL)
+              
       if(conn!=None):
               writeToScreen("Connect to " + conn.getsockname()[0] + " closed.", "System")
               dump=secret_array.pop(conn)
@@ -149,18 +159,22 @@ def processFlag(number, conn=None):
    if(t==4): #passing a friend who this should connect to (I am assuming it will be running on the same port as the other session)
            data = conn.recv(4)
            data = conn.recv(int(data.decode()))
-           Client(data, int(contact_array[conn.getpeername()[0]][0])).start()
+           Client(data.decode(), int(contact_array[conn.getpeername()[0]][0])).start()
            
            
            
 
-#processes commands passed in via the / text input #HOLY SHIT PLEASE, ERROR CHECKING
+#processes commands passed in via the / text input
 def processUserCommands(command, param):
         global conn_array
         global secret_array
         global username
         
         if(command == "nick"): #change nickname
+                for letter in param[0]:
+                        if(letter== " " or letter == "\n"):
+                                error_window(root,"Invalid username. No spaces allowed.")
+                                return
                 writeToScreen("Username is being changed to "+param[0], "System")
                 for conn in conn_array:
                         conn.send("-002".encode())
@@ -171,12 +185,13 @@ def processUserCommands(command, param):
                         conn.send("-001".encode())
                 processFlag("-001")
         if(command == "connect"): #connects to passed in host port
-                Client(param[0], int(param[1])).start()
-                
+                if(options_sanitation(param[1], param[0])):
+                        Client(param[0], int(param[1])).start()
         if(command == "kick"):
                 print("I need to figure out a way to make it know what conn to grab based on the username")
         if(command == "host"): #starts server on passed in port
-                Server(int(param[0])).start()
+                if(options_sanitation(param[0])):
+                        Server(int(param[0])).start()
                 
            
 #checks to see if the username name is free for use
@@ -193,11 +208,12 @@ def isUsernameFree(name):
 def passFriends(conn):
         global conn_array
         for connection in conn_array:
-                conn.send("-004".encode())
-                conn.send(formatNumber(len(connection.getpeername()[0])).encode()) #pass the ip address
-                conn.send(connection.getpeername()[0].encode())
-                #conn.send(formatNumber(len(connection.getpeername()[1])).encode()) #pass the port number
-                #conn.send(connection.getpeername()[1].encode())
+                if(conn != connection):
+                        conn.send("-004".encode())
+                        conn.send(formatNumber(len(connection.getpeername()[0])).encode()) #pass the ip address
+                        conn.send(connection.getpeername()[0].encode())
+                        #conn.send(formatNumber(len(connection.getpeername()[1])).encode()) #pass the port number
+                        #conn.send(connection.getpeername()[1].encode())
 
 #--------------------------------------------------------------------------
 
@@ -205,6 +221,7 @@ def passFriends(conn):
 def client_options_window(master):
    top = Toplevel(master)
    top.title("Connection options")
+   top.protocol("WM_DELETE_WINDOW", lambda: optionDelete(top))
    Label(top, text="Server IP:").grid(row=0)
    location = Entry(top)
    location.grid(row=0, column=1)
@@ -256,6 +273,7 @@ def ip_process(ipArray):
 def server_options_window(master):
    top = Toplevel(master)
    top.title("Connection options")
+   top.protocol("WM_DELETE_WINDOW", lambda: optionDelete(top))
    Label(top, text="Port:").grid(row=0)
    port = Entry(top)
    port.grid(row=0, column=1)
@@ -266,7 +284,20 @@ def server_options_window(master):
 def server_options_go(port, window):
    if(options_sanitation(port)):
       window.destroy()
+      connecter.config(state=NORMAL)
       Server(int(port)).start()
+
+#---------------------------------------------------------------------------------------
+
+def username_options_window(master):
+        top = Toplevel(master)
+        top.title("Username options")
+        #top.protocol("WM_DELETE_WINDOW", lambda: optionDelete(top))
+        Label(top, text="Username:").grid(row=0)
+        name = Entry(top)
+        name.grid(row=0, column=1)
+        go = Button(top, text="Change", command=lambda:processUserCommands("nick", [name.get()]))
+        go.grid(row=1, column=1)
 
 #----------------------------------------------------------------------------------------
 
@@ -278,6 +309,9 @@ def error_window(master, texty):
    go = Button(window, text="OK", command=window.destroy)
    go.pack()
 
+def optionDelete(window):
+        connecter.config(state=NORMAL)
+        window.destroy()
 
 #----------------------------------------------------------------------------------------
 #Contacts window
@@ -398,6 +432,7 @@ class Server ( threading.Thread ):
        
        global statusConnect
        statusConnect.set("Disconnect")
+       connecter.config(state=NORMAL)
        
        
 
@@ -428,8 +463,19 @@ class Server ( threading.Thread ):
        global secret_array
        secret = power(b, a) % prime
        secret_array[conn]=secret #store the encryption key by the connection
-       username_array[conn] = addr[0]
-       contact_array[str(addr[0])]=[str(self.port), "No nick"]
+
+       conn.send(formatNumber(len(username)).encode())
+       conn.send(username.encode())
+
+       data = conn.recv(4)
+       data = conn.recv(int(data.decode()))
+       if(data.decode() != "Self"):
+               username_array[conn]=data.decode()
+               contact_array[str(addr[0])]=[str(self.port), data.decode()]
+       else:
+               username_array[conn] = addr[0]
+               contact_array[str(addr[0])]=[str(self.port), "No_nick"]
+       
        passFriends(conn)
        threading.Thread(target=Runner, args=(conn, secret)).start()
        Server(self.port).start()
@@ -445,6 +491,7 @@ class Client (threading.Thread):
     def run(self):
         global conn_array
         global secret_array
+        print("1", self.host)
         conn_init = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conn_init.settimeout(5.0)
         try:
@@ -455,16 +502,23 @@ class Client (threading.Thread):
         except socket.error:
                 writeToScreen("Connection issue. Host actively refused connection.", "System")
                 raise SystemExit(0)
+        print("2", self.host)
         porta = conn_init.recv(5)
         porte = int(porta.decode())
         conn_init.close()
+        print("3", self.host)
         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conn.connect((self.host,porte))
-        
+
+
+        print("self.host: "+ self.host)
+        print("porte: "+str(porte))        
         writeToScreen("Connected to: " + self.host +" on port: "+ str(porte), "System")
+
         
         global statusConnect
         statusConnect.set("Disconnect")
+        connecter.config(state=NORMAL)
         
         conn_array.append(conn)
         #get my base, prime, and A values
@@ -483,9 +537,20 @@ class Client (threading.Thread):
         conn.send(str(power(base,b)%prime).encode())
         secret = power(a,b)%prime
         secret_array[conn]=secret
-        username_array[conn] = self.host
-        contact_array[conn.getpeername()[0]]=[str(self.port), "No nick"]
+
+        conn.send(formatNumber(len(username)).encode())
+        conn.send(username.encode())
+
+        data = conn.recv(4)
+        data = conn.recv(int(data.decode()))
+        if(data.decode() != "Self"):
+                username_array[conn] = data.decode()
+                contact_array[conn.getpeername()[0]]=[str(self.port), data.decode()]
+        else:
+                username_array[conn] = self.host
+                contact_array[conn.getpeername()[0]]=[str(self.port), "No nick"]
         threading.Thread(target=Runner, args=(conn, secret)).start()
+        #Server(self.port).start() ##########################################################################THIS IS GOOD, BUT I CAN'T TEST ON ONE MACHINE
 
 
 def Runner (conn, secret):
@@ -513,15 +578,25 @@ def QuickServer():
 
 def connects (clientType):
     global conn_array
+    connecter.config(state=DISABLED)
     if(len(conn_array)==0):
         if(clientType==0):
            client_options_window(root)
         if(clientType==1):
             server_options_window(root)
     else:
+       #connecter.config(state=NORMAL)
        for connection in conn_array: 
                connection.send("-001".encode())
        processFlag("-001")
+
+def toOne():
+    global clientType
+    clientType=0
+def toTwo():
+    global clientType
+    clientType=1
+        
 
 #----------------------------------------------------------------------------------------
 
@@ -538,7 +613,7 @@ menubar = Menu(root)
 
 file_menu= Menu(menubar, tearoff=0)
 file_menu.add_command(label="Save chat", command=lambda: dummer(1)) #####
-file_menu.add_command(label="Change username", command=lambda: dummer(2)) #####
+file_menu.add_command(label="Change username", command=lambda:username_options_window(root) )
 file_menu.add_command(label="Exit", command=lambda: dummer(3)) #####
 menubar.add_cascade(label="File", menu=file_menu)
 
@@ -579,8 +654,8 @@ text_input.pack()
 statusConnect= StringVar()
 statusConnect.set("Connect")
 clientType= 1
-Radiobutton(root, text="Client", variable= clientType, value=0).pack(anchor=E)
-Radiobutton(root, text="Server", variable= clientType, value=1).pack(anchor=E)
+Radiobutton(root, text="Client", variable= clientType, value=0, command=toOne).pack(anchor=E)
+Radiobutton(root, text="Server", variable= clientType, value=1, command=toTwo).pack(anchor=E)
 connecter = Button(root, textvariable=statusConnect, command=lambda: connects(clientType))
 connecter.pack()
 
