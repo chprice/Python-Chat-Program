@@ -145,16 +145,6 @@ def processFlag(number, conn=None):
                    writeToScreen("User "+username_array[conn]+" has changed their username to "+name, "System")
                    username_array[conn] = name
                    contact_array[conn.getpeername()[0]]= [conn.getpeername()[1], name]
-           else:
-                   conn.send("-003".encode())
-
-   if(t==3): #username already taken OR username requested is the IP of another connection, pick another one
-           global username
-           username = "Self"
-           writeToScreen("Username is already taken, please choose another.", "System")
-           for conn in conn_array:
-                   conn.send("-002".encode())
-                   netThrow(conn, secret_array[conn], conn.getpeername()[0])
 
    if(t==4): #passing a friend who this should connect to (I am assuming it will be running on the same port as the other session)
            data = conn.recv(4)
@@ -175,11 +165,14 @@ def processUserCommands(command, param):
                         if(letter== " " or letter == "\n"):
                                 error_window(root,"Invalid username. No spaces allowed.")
                                 return
-                writeToScreen("Username is being changed to "+param[0], "System")
-                for conn in conn_array:
-                        conn.send("-002".encode())
-                        netThrow(conn, secret_array[conn], param[0])
-                username = param[0]
+                if(isUsernameFree(param[0])):
+                        writeToScreen("Username is being changed to "+param[0], "System")
+                        for conn in conn_array:
+                                conn.send("-002".encode())
+                                netThrow(conn, secret_array[conn], param[0])
+                        username = param[0]
+                else:
+                       writeToScreen(param[0]+" is already taken as a username", "System") 
         if(command == "disconnect"): #disconnects from current connection
                 for conn in conn_array:
                         conn.send("-001".encode())
@@ -187,8 +180,6 @@ def processUserCommands(command, param):
         if(command == "connect"): #connects to passed in host port
                 if(options_sanitation(param[1], param[0])):
                         Client(param[0], int(param[1])).start()
-        if(command == "kick"):
-                print("I need to figure out a way to make it know what conn to grab based on the username")
         if(command == "host"): #starts server on passed in port
                 if(options_sanitation(param[0])):
                         Server(int(param[0])).start()
@@ -222,6 +213,7 @@ def client_options_window(master):
    top = Toplevel(master)
    top.title("Connection options")
    top.protocol("WM_DELETE_WINDOW", lambda: optionDelete(top))
+   top.grab_set()
    Label(top, text="Server IP:").grid(row=0)
    location = Entry(top)
    location.grid(row=0, column=1)
@@ -273,6 +265,7 @@ def ip_process(ipArray):
 def server_options_window(master):
    top = Toplevel(master)
    top.title("Connection options")
+   top.grab_set()
    top.protocol("WM_DELETE_WINDOW", lambda: optionDelete(top))
    Label(top, text="Port:").grid(row=0)
    port = Entry(top)
@@ -284,7 +277,6 @@ def server_options_window(master):
 def server_options_go(port, window):
    if(options_sanitation(port)):
       window.destroy()
-      connecter.config(state=NORMAL)
       Server(int(port)).start()
 
 #---------------------------------------------------------------------------------------
@@ -292,12 +284,16 @@ def server_options_go(port, window):
 def username_options_window(master):
         top = Toplevel(master)
         top.title("Username options")
-        #top.protocol("WM_DELETE_WINDOW", lambda: optionDelete(top))
+        top.grab_set()
         Label(top, text="Username:").grid(row=0)
         name = Entry(top)
         name.grid(row=0, column=1)
-        go = Button(top, text="Change", command=lambda:processUserCommands("nick", [name.get()]))
+        go = Button(top, text="Change", command=lambda:username_options_go(name.get(),top))
         go.grid(row=1, column=1)
+
+def username_options_go(name, window):
+        processUserCommands("nick", [name])
+        window.destroy()
 
 #----------------------------------------------------------------------------------------
 
@@ -305,11 +301,13 @@ def username_options_window(master):
 def error_window(master, texty):
    window = Toplevel(master)
    window.title("ERROR")
+   window.grab_set()
    Label(window, text=texty).pack()
    go = Button(window, text="OK", command=window.destroy)
    go.pack()
 
 def optionDelete(window):
+        print("Called")
         connecter.config(state=NORMAL)
         window.destroy()
 
@@ -321,6 +319,7 @@ def contacts_window(master):
         global contact_array
         cWindow = Toplevel(master)
         cWindow.title("Contacts")
+        cWindow.grab_set()
         scrollbar = Scrollbar(cWindow, orient=VERTICAL)
         listbox = Listbox(cWindow, yscrollcommand=scrollbar.set)
         scrollbar.config(command=listbox.yview)
@@ -353,7 +352,7 @@ def dump_contacts():
                 print("Can't dump contacts.")
                 return
         for contact in contact_array:
-                filehandle.write(contact+" "+contact_array[contact][0]+" "+contact_array[contact][1]+"\n")
+                filehandle.write(contact+" "+str(contact_array[contact][0])+" "+contact_array[contact][1]+"\n")
         filehandle.close()
 
 
@@ -439,8 +438,7 @@ class Server ( threading.Thread ):
        #create the numbers for my encryption
        prime= random.randint(1000,9000)
        while(not isPrime(prime)):
-               prime = random.randint(1000,9000)
-       print(prime, isPrime(prime)) 
+               prime = random.randint(1000,9000) 
        base= random.randint(20,100)
        a= random.randint(20,100)
 
@@ -491,28 +489,25 @@ class Client (threading.Thread):
     def run(self):
         global conn_array
         global secret_array
-        print("1", self.host)
         conn_init = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conn_init.settimeout(5.0)
         try:
                 conn_init.connect((self.host, self.port))
         except socket.timeout:
                 writeToScreen("Timeout issue. Host possible not there.", "System")
+                connecter.config(state=NORMAL)
                 raise SystemExit(0)
         except socket.error:
                 writeToScreen("Connection issue. Host actively refused connection.", "System")
+                connecter.config(state=NORMAL)
                 raise SystemExit(0)
-        print("2", self.host)
         porta = conn_init.recv(5)
         porte = int(porta.decode())
         conn_init.close()
-        print("3", self.host)
         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         conn.connect((self.host,porte))
 
-
-        print("self.host: "+ self.host)
-        print("porte: "+str(porte))        
+    
         writeToScreen("Connected to: " + self.host +" on port: "+ str(porte), "System")
 
         
@@ -566,6 +561,7 @@ def Runner (conn, secret):
 def QuickClient():
         window = Toplevel(root)
         window.title("Connection options")
+        window.grab_set()
         Label(window, text="Server IP:").grid(row=0)
         destination = Entry(window)
         destination.grid(row=0, column=1)
@@ -614,7 +610,7 @@ menubar = Menu(root)
 file_menu= Menu(menubar, tearoff=0)
 file_menu.add_command(label="Save chat", command=lambda: dummer(1)) #####
 file_menu.add_command(label="Change username", command=lambda:username_options_window(root) )
-file_menu.add_command(label="Exit", command=lambda: dummer(3)) #####
+file_menu.add_command(label="Exit", command=lambda: root.destroy())
 menubar.add_cascade(label="File", menu=file_menu)
 
 connection_menu = Menu(menubar, tearoff=0)
@@ -626,7 +622,6 @@ menubar.add_cascade(label="Connect", menu=connection_menu)
 server_menu = Menu(menubar, tearoff=0)
 server_menu.add_command(label="Launch server", command=QuickServer)
 server_menu.add_command(label="Listen on port", command=lambda: server_options_window(root))
-server_menu.add_command(label="Kick user", command=dummy) #####
 menubar.add_cascade(label="Server", menu=server_menu)
 
 menubar.add_command(label="Contacts", command=lambda:contacts_window(root))
