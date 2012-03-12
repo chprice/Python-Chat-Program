@@ -1,4 +1,5 @@
 from tkinter import *
+from tkinter.filedialog import asksaveasfilename
 import threading
 import socket
 import random
@@ -572,6 +573,21 @@ def QuickClient():
 def QuickServer():
         Server(9999).start()
 
+
+def saveHistory():
+        global main_body_text
+        file_name = asksaveasfilename(title="Choose save location", filetypes = [('Plain text', '*.txt'), ('Any File', '*.*')])
+        try:
+                filehandle = open(file_name+".txt", "w")
+        except IOError:
+                print("Can't save history.")
+                return
+        contents = main_body_text.get(1.0, END)
+        for line in contents:
+                filehandle.write(line)
+        filehandle.close()
+        
+
 def connects (clientType):
     global conn_array
     connecter.config(state=DISABLED)
@@ -599,16 +615,10 @@ def toTwo():
 root = Tk()
 root.title("Chat")
 
-def dummy():
-        print("Write this function")
-
-def dummer(push):
-        print("Nooo!")
-
 menubar = Menu(root)
 
 file_menu= Menu(menubar, tearoff=0)
-file_menu.add_command(label="Save chat", command=lambda: dummer(1)) #####
+file_menu.add_command(label="Save chat", command=lambda: saveHistory())
 file_menu.add_command(label="Change username", command=lambda:username_options_window(root) )
 file_menu.add_command(label="Exit", command=lambda: root.destroy())
 menubar.add_cascade(label="File", menu=file_menu)
