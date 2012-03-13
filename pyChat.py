@@ -88,8 +88,9 @@ def netThrow(conn, secret, message):
                 conn.send(formatNumber(len(x_encode(message,secret))).encode())
                 conn.send(x_encode(message,secret).encode())
         except socket.error:
-                writeToScreen("Connection issue. Sending message failed.", "System")
-                raise SystemExit(0)
+                if(len(conn_array)!=0):
+                        writeToScreen("Connection issue. Sending message failed.", "System")
+                processFlag("-001")
    
 #Receive and return the message through open socket conn, decrypting using key secret.
 #If the message length begins with - instead of a number, process as a flag and return 1.
@@ -102,8 +103,10 @@ def netCatch(conn, secret):
                 data = conn.recv(int(data.decode()))
                 return refract(xcrypt(data.decode(), bin(secret)[2:]))
         except socket.error:
-                writeToScreen("Connection issue. Receiving message failed.", "System")
-                raise SystemExit(0)
+                if(len(conn_array)!=0):   
+                        writeToScreen("Connection issue. Receiving message failed.", "System")
+                processFlag("-001")
+                
 
 
 #Checks to see if a number is prime
@@ -130,9 +133,13 @@ def processFlag(number, conn=None):
               writeToScreen("Connection closed.","System")
               dump=secret_array.pop(conn_array[0])
               dump=conn_array.pop()
-              dump.close()
+              try:
+                      dump.close()
+              except socket.error:
+                      print("Issue with someone being bad about disconnecting")
               statusConnect.set("Connect")
               connecter.config(state=NORMAL)
+              return
               
       if(conn!=None):
               writeToScreen("Connect to " + conn.getsockname()[0] + " closed.", "System")
@@ -218,6 +225,7 @@ def client_options_window(master):
    Label(top, text="Server IP:").grid(row=0)
    location = Entry(top)
    location.grid(row=0, column=1)
+   location.focus_set()
    Label(top, text="Port:").grid(row=1)
    port = Entry(top)
    port.grid(row=1, column=1)
@@ -271,6 +279,7 @@ def server_options_window(master):
    Label(top, text="Port:").grid(row=0)
    port = Entry(top)
    port.grid(row=0, column=1)
+   port.focus_set()
    go = Button(top, text="Launch", command=lambda:server_options_go(port.get(), top))
    go.grid(row=1, column=1)
 
@@ -288,6 +297,7 @@ def username_options_window(master):
         top.grab_set()
         Label(top, text="Username:").grid(row=0)
         name = Entry(top)
+        name.focus_set()
         name.grid(row=0, column=1)
         go = Button(top, text="Change", command=lambda:username_options_go(name.get(),top))
         go.grid(row=1, column=1)
@@ -306,9 +316,9 @@ def error_window(master, texty):
    Label(window, text=texty).pack()
    go = Button(window, text="OK", command=window.destroy)
    go.pack()
+   go.focus_set()
 
 def optionDelete(window):
-        print("Called")
         connecter.config(state=NORMAL)
         window.destroy()
 
@@ -325,9 +335,27 @@ def contacts_window(master):
         listbox = Listbox(cWindow, yscrollcommand=scrollbar.set)
         scrollbar.config(command=listbox.yview)
         scrollbar.pack(side=RIGHT, fill=Y)
+        buttons = Frame(cWindow)
+        cBut = Button(buttons, text="Connect", command=lambda:contacts_connect(listbox.get(ACTIVE).split(" ")))
+        cBut.pack(side = LEFT)
+        dBut = Button(buttons, text="Remove", command=lambda:contacts_remove(listbox.get(ACTIVE).split(" "), listbox))
+        dBut.pack(side = LEFT)
+        aBut = Button(buttons, text="Add", command=lambda:contacts_add(listbox.get(ACTIVE).split(" "), listbox ))
+        aBut.pack(side = LEFT)
+        buttons.pack(side = BOTTOM)
+        
         for person in contact_array:
                 listbox.insert(END, contact_array[person][1]+" "+person+" "+contact_array[person][0])
         listbox.pack(side=LEFT, fill=BOTH, expand=1)
+        
+def contacts_connect(item):
+        Client(item[1], int(item[2])).start()
+
+def contacts_remove(item, listbox):
+        print(item)
+
+def contacts_add(item, listbox):
+        print(item)
         
 
 #Loads the recent chats out of the persistant file contacts.dat
@@ -544,7 +572,7 @@ class Client (threading.Thread):
                 contact_array[conn.getpeername()[0]]=[str(self.port), data.decode()]
         else:
                 username_array[conn] = self.host
-                contact_array[conn.getpeername()[0]]=[str(self.port), "No nick"]
+                contact_array[conn.getpeername()[0]]=[str(self.port), "No_nick"]
         threading.Thread(target=Runner, args=(conn, secret)).start()
         #Server(self.port).start() ##########################################################################THIS IS GOOD, BUT I CAN'T TEST ON ONE MACHINE
 
