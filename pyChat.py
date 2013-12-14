@@ -160,7 +160,7 @@ def processFlag(number, conn=None):
                 dump.close()
             except socket.error:
                 print("Issue with someone being bad about disconnecting")
-            if( not isCLI):
+            if(not isCLI):
                 statusConnect.set("Connect")
                 connecter.config(state=NORMAL)
             return
@@ -263,8 +263,7 @@ def client_options_go(dest, port, window):
       if(not isCLI):
           window.destroy()
       Client(dest, int(port)).start()
-   else:
-       if(isCLI):
+   elif(isCLI):
            sys.exit(1)
 
 
@@ -320,8 +319,7 @@ def server_options_go(port, window):
       if(not isCLI):
           window.destroy()
       Server(int(port)).start()
-   else:
-       if(isCLI):
+   elif(isCLI):
            sys.exit(1)
 
 #---------------------------------------------------------------------------------------
