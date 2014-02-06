@@ -81,19 +81,6 @@ def refract(binary):
     return master
 
 
-# I'm not actually sure why this is here. But it's used, so for now it stays.
-# Raises x to the power of y
-def power(x, y):
-    if(y == 0):
-        return 1
-    if(y == 1):
-        return x
-    final = 1
-    for n in range(0, y):
-        final = final * x
-    return final
-
-
 # Ensures that number is atleast length 4 by adding extra zeros to the front
 def formatNumber(number):
     temp = str(number)
@@ -605,8 +592,8 @@ class Server (threading.Thread):
         conn.send(formatNumber(len(str(prime))).encode())
         conn.send(str(prime).encode())
 
-        conn.send(formatNumber(len(str(power(base, a) % prime))).encode())
-        conn.send(str(power(base, a) % prime).encode())
+        conn.send(formatNumber(len(str(pow(base, a) % prime))).encode())
+        conn.send(str(pow(base, a) % prime).encode())
 
         # get B
         data = conn.recv(4)
@@ -615,7 +602,7 @@ class Server (threading.Thread):
 
         # calculate the encryption key
         global secret_array
-        secret = power(b, a) % prime
+        secret = pow(b, a) % prime
         # store the encryption key by the connection
         secret_array[conn] = secret
 
@@ -685,9 +672,9 @@ class Client (threading.Thread):
         a = int(data.decode())
         b = random.randint(20, 100)
         # send the B value
-        conn.send(formatNumber(len(str(power(base, b) % prime))).encode())
-        conn.send(str(power(base, b) % prime).encode())
-        secret = power(a, b) % prime
+        conn.send(formatNumber(len(str(pow(base, b) % prime))).encode())
+        conn.send(str(pow(base, b) % prime).encode())
+        secret = pow(a, b) % prime
         secret_array[conn] = secret
 
         conn.send(formatNumber(len(username)).encode())
