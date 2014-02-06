@@ -1,19 +1,19 @@
 import sys
-if not (sys.hexversion > 0x03000000):
+if not sys.hexversion > 0x03000000:
     version = 2
 else:
     version = 3
-if(len(sys.argv) > 1 and sys.argv[1] == "-cli"):
+if len(sys.argv) > 1 and sys.argv[1] == "-cli":
     print("Starting command line chat")
     isCLI = True
 else:
     isCLI = False
 
 
-if(version == 2):
+if version == 2:
     from Tkinter import *
     from tkFileDialog import asksaveasfilename
-if(version == 3):
+if version == 3:
     from tkinter import *
     from tkinter.filedialog import asksaveasfilename
 import threading
@@ -50,7 +50,7 @@ def binWord(word):
     master = ""
     for letter in word:
         temp = bin(ord(letter))[2:]
-        while(len(temp) < 7):
+        while len(temp) < 7:
             temp = '0' + temp
         master = master + temp
     return master
@@ -61,10 +61,10 @@ def xcrypt(message, key):
     count = 0
     master = ""
     for letter in message:
-        if(count == len(key)):
+        if count == len(key):
             count = 0
-        master = master + str(int(letter) ^ int(key[count]))
-        count = count + 1
+        master += str(int(letter) ^ int(key[count]))
+        count += 1
     return master
 
 
@@ -77,14 +77,14 @@ def x_encode(string, number):
 def refract(binary):
     master = ""
     for x in range(0, int(len(binary) / 7)):
-        master = master + chr(int(binary[x * 7: (x + 1) * 7], 2) + 0)
+        master += chr(int(binary[x * 7: (x + 1) * 7], 2) + 0)
     return master
 
 
 # Ensures that number is atleast length 4 by adding extra zeros to the front
 def formatNumber(number):
     temp = str(number)
-    while(len(temp) < 4):
+    while len(temp) < 4:
         temp = '0' + temp
     return temp
 
@@ -96,7 +96,7 @@ def netThrow(conn, secret, message):
         conn.send(formatNumber(len(x_encode(message, secret))).encode())
         conn.send(x_encode(message, secret).encode())
     except socket.error:
-        if(len(conn_array) != 0):
+        if len(conn_array) != 0:
             writeToScreen(
                 "Connection issue. Sending message failed.", "System")
             processFlag("-001")
@@ -108,13 +108,13 @@ def netThrow(conn, secret, message):
 def netCatch(conn, secret):
     try:
         data = conn.recv(4)
-        if(data.decode()[0] == '-'):
+        if data.decode()[0] == '-':
             processFlag(data.decode(), conn)
             return 1
         data = conn.recv(int(data.decode()))
         return refract(xcrypt(data.decode(), bin(secret)[2:]))
     except socket.error:
-        if(len(conn_array) != 0):
+        if len(conn_array) != 0:
             writeToScreen(
                 "Connection issue. Receiving message failed.", "System")
         processFlag("-001")
@@ -123,11 +123,11 @@ def netCatch(conn, secret):
 # Checks to see if a number is prime
 def isPrime(number):
     x = 1
-    if(number == 2):
+    if number == 2 or number == 3:
         return True
-    while (x < math.sqrt(number)):
-        x = x + 1
-        if(number % x == 0):
+    while x < math.sqrt(number):
+        x += 1
+        if number % x == 0:
             return False
     return True
 
@@ -141,10 +141,10 @@ def processFlag(number, conn=None):
     global contact_array
     global isCLI
     t = int(number[1:])
-    if(t == 1):  # disconnect
+    if t == 1:  # disconnect
         # in the event of single connection being left or if we're just a
         # client
-        if(len(conn_array) == 1):
+        if len(conn_array) == 1:
             writeToScreen("Connection closed.", "System")
             dump = secret_array.pop(conn_array[0])
             dump = conn_array.pop()
@@ -152,19 +152,19 @@ def processFlag(number, conn=None):
                 dump.close()
             except socket.error:
                 print("Issue with someone being bad about disconnecting")
-            if(not isCLI):
+            if not isCLI:
                 statusConnect.set("Connect")
                 connecter.config(state=NORMAL)
             return
 
-        if(conn != None):
+        if conn != None:
             writeToScreen("Connect to " + conn.getsockname()
                           [0] + " closed.", "System")
             dump = secret_array.pop(conn)
             conn_array.remove(conn)
             conn.close()
 
-    if(t == 2):  # username change
+    if t == 2:  # username change
         name = netCatch(conn, secret_array[conn])
         if(isUsernameFree(name)):
             writeToScreen(
@@ -175,7 +175,7 @@ def processFlag(number, conn=None):
 
     # passing a friend who this should connect to (I am assuming it will be
     # running on the same port as the other session)
-    if(t == 4):
+    if t == 4:
         data = conn.recv(4)
         data = conn.recv(int(data.decode()))
         Client(data.decode(),
@@ -188,15 +188,15 @@ def processUserCommands(command, param):
     global secret_array
     global username
 
-    if(command == "nick"):  # change nickname
+    if command == "nick":  # change nickname
         for letter in param[0]:
-            if(letter == " " or letter == "\n"):
-                if(isCLI):
+            if letter == " " or letter == "\n":
+                if isCLI:
                     error_window(0, "Invalid username. No spaces allowed.")
                 else:
                     error_window(root, "Invalid username. No spaces allowed.")
                 return
-        if(isUsernameFree(param[0])):
+        if isUsernameFree(param[0]):
             writeToScreen("Username is being changed to " + param[0], "System")
             for conn in conn_array:
                 conn.send("-002".encode())
@@ -205,14 +205,14 @@ def processUserCommands(command, param):
         else:
             writeToScreen(param[0] +
                           " is already taken as a username", "System")
-    if(command == "disconnect"):  # disconnects from current connection
+    if command == "disconnect":  # disconnects from current connection
         for conn in conn_array:
             conn.send("-001".encode())
         processFlag("-001")
-    if(command == "connect"):  # connects to passed in host port
+    if command == "connect":  # connects to passed in host port
         if(options_sanitation(param[1], param[0])):
             Client(param[0], int(param[1])).start()
-    if(command == "host"):  # starts server on passed in port
+    if command == "host":  # starts server on passed in port
         if(options_sanitation(param[0])):
             Server(int(param[0])).start()
 
@@ -222,7 +222,7 @@ def isUsernameFree(name):
     global username_array
     global username
     for conn in username_array:
-        if(name == username_array[conn] or name == username):
+        if name == username_array[conn] or name == username:
             return False
     return True
 
@@ -232,7 +232,7 @@ def isUsernameFree(name):
 def passFriends(conn):
     global conn_array
     for connection in conn_array:
-        if(conn != connection):
+        if conn != connection:
             conn.send("-004".encode())
             conn.send(
                 formatNumber(len(connection.getpeername()[0])).encode())  # pass the ip address
@@ -265,27 +265,27 @@ def client_options_window(master):
 
 
 def client_options_go(dest, port, window):
-    if(options_sanitation(port, dest)):
-        if(not isCLI):
+    if options_sanitation(port, dest):
+        if not isCLI:
             window.destroy()
         Client(dest, int(port)).start()
-    elif(isCLI):
+    elif isCLI:
         sys.exit(1)
 
 
 # Checks to make sure the port and the destination ip are both valid,
 # launches error windows if there are any issues
 def options_sanitation(por, loc=""):
-    if(isCLI):
+    if isCLI:
         root = 0
-    if(not por.isnumeric()):
+    if not por.isnumeric():
         error_window(root, "Please input a port number.")
         return False
-    if(int(por) < 0 or 65555 < int(por)):
+    if int(por) < 0 or 65555 < int(por):
         error_window(root, "Please input a port number between 0 and 65555")
         return False
-    if(loc != ""):
-        if(not ip_process(loc.split("."))):
+    if loc != "":
+        if not ip_process(loc.split(".")):
             error_window(root, "Please input a valid ip address.")
             return False
     return True
@@ -293,13 +293,13 @@ def options_sanitation(por, loc=""):
 
 # Checks to make sure every section of the ip is a valid number
 def ip_process(ipArray):
-    if(len(ipArray) != 4):
+    if len(ipArray) != 4:
         return False
     for ip in ipArray:
-        if(not ip.isnumeric()):
+        if not ip.isnumeric():
             return False
         t = int(ip)
-        if(t < 0 or 255 < t):
+        if t < 0 or 255 < t:
             return False
     return True
 
@@ -324,11 +324,11 @@ def server_options_window(master):
 
 
 def server_options_go(port, window):
-    if(options_sanitation(port)):
-        if(not isCLI):
+    if options_sanitation(port):
+        if not isCLI:
             window.destroy()
         Server(int(port)).start()
-    elif(isCLI):
+    elif isCLI:
         sys.exit(1)
 
 #-------------------------------------------------------------------------
@@ -358,7 +358,7 @@ def username_options_go(name, window):
 
 def error_window(master, texty):
     global isCLI
-    if(isCLI):
+    if isCLI:
         writeToScreen(texty, "System")
     else:
         window = Toplevel(master)
@@ -412,7 +412,7 @@ def contacts_connect(item):
 
 
 def contacts_remove(item, listbox):
-    if(listbox.size() != 0):
+    if listbox.size() != 0:
         listbox.delete(ACTIVE)
         global contact_array
         h = contact_array.pop(item[1])
@@ -438,10 +438,10 @@ def contacts_add(listbox, master):
 
 def contacts_add_helper(username, ip, port, window, listbox):
     for letter in username:
-        if(letter == " " or letter == "\n"):
+        if letter == " " or letter == "\n":
             error_window(root, "Invalid username. No spaces allowed.")
             return
-    if(options_sanitation(port, ip)):
+    if options_sanitation(port, ip):
         listbox.insert(END, username + " " + ip + " " + port)
         contact_array[ip] = [port, username]
         window.destroy()
@@ -456,7 +456,7 @@ def load_contacts():
     except IOError:
         return
     line = filehandle.readline()
-    while(len(line) != 0):
+    while len(line) != 0:
         temp = (line.rstrip('\n')).split(" ")  # format: ip, port, name
         contact_array[temp[0]] = temp[1:]
         line = filehandle.readline()
@@ -495,15 +495,15 @@ def placeText(text):
 def writeToScreen(text, username=""):
     global main_body_text
     global isCLI
-    if(isCLI):
-        if(username != ""):
+    if isCLI:
+        if username:
             print(username + ": " + text)
         else:
             print(text)
     else:
         main_body_text.config(state=NORMAL)
         main_body_text.insert(END, '\n')
-        if(username != ""):
+        if username:
             main_body_text.insert(END, username + ": ")
         main_body_text.insert(END, text)
         main_body_text.yview(END)
@@ -515,10 +515,10 @@ def writeToScreen(text, username=""):
 
 def processUserText(event):
     data = text_input.get()
-    if(data[0] != "/"):  # is not a command
+    if data[0] != "/":  # is not a command
         placeText(data)
     else:
-        if(data.find(" ") == -1):
+        if data.find(" ") == -1:
             command = data[1:]
         else:
             command = data[1:data.find(" ")]
@@ -528,10 +528,10 @@ def processUserText(event):
 
 
 def processUserInput(text):  # CLI version
-    if(text[0] != "/"):
+    if text[0] != "/":
         placeText(text)
     else:
-        if(text.find(" ") == -1):
+        if text.find(" ") == -1:
             command = text[1:]
         else:
             command = text[1:text.find(" ")]
@@ -553,7 +553,7 @@ class Server (threading.Thread):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(('', self.port))
 
-        if(len(conn_array) == 0):
+        if len(conn_array) == 0:
             writeToScreen(
                 "Socket is good, waiting for connections on port: " + str(self.port), "System")
         s.listen(1)
@@ -564,7 +564,7 @@ class Server (threading.Thread):
         serv.listen(1)
 
         portVal = str(serv.getsockname()[1])
-        if(len(portVal) == 5):
+        if len(portVal) == 5:
             conn_init.send(portVal.encode())
         else:
             conn_init.send(("0" + portVal).encode())
@@ -580,7 +580,7 @@ class Server (threading.Thread):
 
         # create the numbers for my encryption
         prime = random.randint(1000, 9000)
-        while(not isPrime(prime)):
+        while not isPrime(prime):
             prime = random.randint(1000, 9000)
         base = random.randint(20, 100)
         a = random.randint(20, 100)
@@ -611,7 +611,7 @@ class Server (threading.Thread):
 
         data = conn.recv(4)
         data = conn.recv(int(data.decode()))
-        if(data.decode() != "Self"):
+        if data.decode() != "Self":
             username_array[conn] = data.decode()
             contact_array[str(addr[0])] = [str(self.port), data.decode()]
         else:
@@ -682,7 +682,7 @@ class Client (threading.Thread):
 
         data = conn.recv(4)
         data = conn.recv(int(data.decode()))
-        if(data.decode() != "Self"):
+        if data.decode() != "Self":
             username_array[conn] = data.decode()
             contact_array[
                 conn.getpeername()[0]] = [str(self.port), data.decode()]
@@ -697,9 +697,9 @@ class Client (threading.Thread):
 
 def Runner(conn, secret):
     global username_array
-    while(1):
+    while 1:
         data = netCatch(conn, secret)
-        if(data != 1):
+        if data != 1:
             writeToScreen(data, username_array[conn])
 
 #-------------------------------------------------------------------------
@@ -740,10 +740,10 @@ def saveHistory():
 def connects(clientType):
     global conn_array
     connecter.config(state=DISABLED)
-    if(len(conn_array) == 0):
-        if(clientType == 0):
+    if len(conn_array) == 0:
+        if clientType == 0:
             client_options_window(root)
-        if(clientType == 1):
+        if clientType == 1:
             server_options_window(root)
     else:
         # connecter.config(state=NORMAL)
@@ -765,7 +765,7 @@ def toTwo():
 #-------------------------------------------------------------------------
 
 
-if(len(sys.argv) > 1 and sys.argv[1] == "-cli"):
+if len(sys.argv) > 1 and sys.argv[1] == "-cli":
     print("Starting command line chat")
 
 else:
