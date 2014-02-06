@@ -281,6 +281,9 @@ def options_sanitation(por, loc=""):
     Launches error windows if there are any issues.
 
     """
+    global root
+    if version == 2:
+        por = unicode(por)
     if isCLI:
         root = 0
     if not por.isnumeric():
@@ -300,6 +303,8 @@ def ip_process(ipArray):
     if len(ipArray) != 4:
         return False
     for ip in ipArray:
+        if version == 2:
+            ip = unicode(ip)
         if not ip.isnumeric():
             return False
         t = int(ip)
