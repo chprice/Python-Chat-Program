@@ -138,7 +138,7 @@ def isPrime(number):
 def processFlag(number, conn=None):
     """Process the flag corresponding to number, using open socket conn
     if necessary.
-  
+
     """
     global statusConnect
     global conn_array
@@ -233,7 +233,7 @@ def isUsernameFree(name):
 def passFriends(conn):
     """Sends conn all of the people currently in conn_array so they can connect
     to them.
-    
+
     """
     global conn_array
     for connection in conn_array:
@@ -286,7 +286,7 @@ def options_sanitation(por, loc=""):
         por = unicode(por)
     if isCLI:
         root = 0
-    if not por.isnumeric():
+    if not por.isdigit():
         error_window(root, "Please input a port number.")
         return False
     if int(por) < 0 or 65555 < int(por):
@@ -305,7 +305,7 @@ def ip_process(ipArray):
     for ip in ipArray:
         if version == 2:
             ip = unicode(ip)
-        if not ip.isnumeric():
+        if not ip.isdigit():
             return False
         t = int(ip)
         if t < 0 or 255 < t:
