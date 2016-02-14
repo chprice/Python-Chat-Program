@@ -1,9 +1,9 @@
 import logging
 import socket
 
+from models.Constants import Command
 from util import util
-from Encryptor import Encryptor
-from Constants import Command
+from util.Encryptor import Encryptor
 
 
 class Networked(object):
@@ -26,7 +26,7 @@ class Networked(object):
         message_size = self.connection.recv(size).decode()
         if message_size[0] == '-':
             command_body = self._receive_encrypted()
-            return Command(message_size, command_body)
+            return Command(self.connection, message_size, command_body)
 
         message = self.connection.recv(int(message_size)).decode()
         return message
@@ -34,7 +34,7 @@ class Networked(object):
     def _receive_encrypted(self):
         encrypted_message = self._receive()
         if isinstance(encrypted_message, Command):
-            return Command
+            return encrypted_message
         return self.encryptor.decrypt(encrypted_message)
 
     def send_message(self, message):
@@ -45,3 +45,13 @@ class Networked(object):
 
     def send_command(self, command):
         self._send(command)
+
+    def _close(self):
+        if self.connection:
+            try:
+                self.connection.close()
+            except socket.error:
+                print("Issue with someone being bad about disconnecting")
+            except Exception as ex:
+                print "Unknown error occurred", ex
+

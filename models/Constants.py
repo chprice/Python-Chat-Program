@@ -4,7 +4,8 @@ CONTACT_SEND = "-004"
 
 
 class Command(object):
-    def __init__(self, operation, message):
+    def __init__(self, connection, operation, message):
+        self.connection = connection
         self.operation = operation
         self.message = message
 

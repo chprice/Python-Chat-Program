@@ -1,32 +1,32 @@
-import threading
 import socket
-from models import Contact, Constants
-from models.Client import Client
+import threading
 
+from web.Client import Client
+from managers.ClientManager import ClientManager
 
 
 class Server (threading.Thread):
     "A class for a Server instance."""
-    def __init__(self, port, ui_manager, client_manager):
+    def __init__(self, port, ui_manager):
         threading.Thread.__init__(self)
         self.port = port
         self.ui_manager = ui_manager
-        self.client_manager = client_manager
-
+        self.client_manager = ClientManager(self.ui_manager)
+        self.active = False
 
     def run(self):
-        while(True): # This might need to be around the s.listen call
+        self.active = True
+        while self.active: # This might need to be around the s.listen call
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.bind(('', self.port))
 
-        # if not self.connection_manager.has_connections():
-        #     self.ui_manager.writeToScreen(
-        #         "Socket is good, waiting for connections on port: " +
-        #         str(self.port), "System")
+            if self.client_manager.number_of_registered_clients() == 0:
+                self.client_manager.write_system_message("Socket is good, waiting for connections port %d." % self.port)
             s.listen(1)
 
             self._handle_new_client(*s.accept())
 
+        s.close()
 
     def _handle_new_client(self, conn_init, addr_init):
         serv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,19 +41,17 @@ class Server (threading.Thread):
 
         conn_init.close()
         conn, addr = serv.accept()
-        client = Client(conn)
-        #conn_array.append(conn)  # add an array entry for this connection
+        client = Client(self.client_manager, conn)
 
-        #self.ui_manager.writeToScreen("Connected by " + str(addr[0]), "System")
+        self.client_manager.write_system_message("Connected by %s." % addr[0])
 
         global statusConnect
         statusConnect.set("Disconnect")
         #connecter.config(state=NORMAL) # UI piece
 
         client.establish_security_key_as_server()
-        #self.connection_manager.establish_security_key(conn)
 
-        client.send_message(username)
+        client.send_message(self.client_manager.get_contact_manager().get_local_username())
 
         client_username = client.receive_message()
 
@@ -62,7 +60,9 @@ class Server (threading.Thread):
 
         client.username = client_username
 
-        self.client_manager.register_client(client)
-        #self.connection_manager.register_contact(conn, Contact.Contact(client_username, str(addr[0]), str(self.port)))
+        self.client_manager.register_client(client, client_username)
 
         self.client_manager.send_peers(client)
+
+    def stop(self):
+        self.active = False

@@ -1,70 +1,106 @@
-class Client (threading.Thread):
-    """A class for a Client instance."""
-    def __init__(self, host, port):
-        threading.Thread.__init__(self)
-        self.port = port
-        self.host = host
+import socket
+import threading
 
-    def run(self):
-        global conn_array
-        global secret_array
-        conn_init = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        conn_init.settimeout(5.0)
+from models.Constants import *
+from web.Networked import Networked
+
+
+class Client(Networked):
+    def __init__(self, client_manager, connection=None):
+        super(Client, self).__init__(connection)
+        self.client_manager = client_manager
+        self.client_listener = None
+        if connection:
+            self.client_listener = ClientListener(self.client_manager, self.connection)
+            self.client_listener.start()
+
+
+    def establish_security_key_as_server(self):
+        (prime, base, a) = self.encryptor.generate_new_diffie_hellman_set()
+
+        self._send(base)
+        self._send(prime)
+        self._send(pow(base, a) % prime)
+
+        b = int(self._receive())
+        secret_key = pow(b, a) % prime
+        self.encryptor.set_key(secret_key)
+
+    def establish_security_key_as_client(self):
+
+        base = self._receive()
+        prime = self._receive()
+        a = self._receive()
+
+        (_, _, b) = self.encryptor.generate_new_diffie_hellman_set()
+
+        self._send(pow(base, b) % prime)
+
+        secret_key = pow(a, b) % prime
+        self.encryptor.set_key(secret_key)
+
+    def connect_to_server(self, host, port):
+        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connection.settimeout(5.0)
         try:
-            conn_init.connect((self.host, self.port))
+            self.connection.connect((host, port))
         except socket.timeout:
-            writeToScreen("Timeout issue. Host possible not there.", "System")
-            connecter.config(state=NORMAL)
+            self.client_manager.write_system_message("Timeout issue. Host possible not there.")
+            self.client_manager
+            #connecter.config(state=NORMAL)
             raise SystemExit(0)
         except socket.error:
-            writeToScreen(
-                "Connection issue. Host actively refused connection.", "System")
-            connecter.config(state=NORMAL)
+            self.client_manager.write_system_message("Connection issue. Host actively refused connection.")
+            #connecter.config(state=NORMAL)
             raise SystemExit(0)
-        porta = conn_init.recv(5)
-        porte = int(porta.decode())
-        conn_init.close()
-        conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        conn.connect((self.host, porte))
 
-        writeToScreen("Connected to: " + self.host +
-                      " on port: " + str(porte), "System")
+        permanent_port = int(self._receive(5))
+        self.connection.close() # disconnect from new connection port and move to permanent port
 
-        global statusConnect
-        statusConnect.set("Disconnect")
-        connecter.config(state=NORMAL)
+        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connection.connect((host, permanent_port))
 
-        conn_array.append(conn)
-        # get my base, prime, and A values
-        data = conn.recv(4)
-        data = conn.recv(int(data.decode()))
-        base = int(data.decode())
-        data = conn.recv(4)
-        data = conn.recv(int(data.decode()))
-        prime = int(data.decode())
-        data = conn.recv(4)
-        data = conn.recv(int(data.decode()))
-        a = int(data.decode())
-        b = random.randint(20, 100)
-        # send the B value
-        conn.send(formatNumber(len(str(pow(base, b) % prime))).encode())
-        conn.send(str(pow(base, b) % prime).encode())
-        secret = pow(a, b) % prime
-        secret_array[conn] = secret
+        self.client_listener = ClientListener(self.client_manager, self.connection)
+        self.client_listener.start()
 
-        conn.send(formatNumber(len(username)).encode())
-        conn.send(username.encode())
+    def close(self):
+        if self.client_listener:
+            self.client_listener._close()
+        self._close()
 
-        data = conn.recv(4)
-        data = conn.recv(int(data.decode()))
-        if data.decode() != "Self":
-            username_array[conn] = data.decode()
-            contact_array[
-                conn.getpeername()[0]] = [str(self.port), data.decode()]
-        else:
-            username_array[conn] = self.host
-            contact_array[conn.getpeername()[0]] = [str(self.port), "No_nick"]
-        threading.Thread(target=Runner, args=(conn, secret)).start()
-        # Server(self.port).start()
-        # ##########################################################################THIS
-        # IS GOOD, BUT I CAN'T TEST ON ONE MACHINE
+
+class ClientListener(Networked, threading.Thread):
+
+    def __init__(self, client_manager, connection):
+        super(ClientListener, self).__init__(connection)
+        self.client_manager = client_manager
+        self.connection = connection
+
+    def run(self):
+        while True:
+            message = self.receive_message()
+            if isinstance(message, Command):
+                self.handle_command(message)
+            else:
+                self.client_manager.write_message(self.connection, message)
+
+    def handle_command(self, command):
+        try:
+            if command.operation == DISCONNECT:
+                self.client_manager.close_connection(command.connection)
+                self.client_manager.write_system_message(
+                    "Connect to " + command.connection.getsockname()[0] + " closed.")
+
+            elif command.operation == USERNAME_CHANGE:
+                username = command.message
+                if self.client_manager.get_contact_manager().is_username_free(username):
+                    self.client_manager.write_system_message("User %s has changed their username to %s." %
+                            (self.client_manager.get_contact_manager().get_username(command.connection), username))
+                    self.client_manager.get_contact_manager().update_contact_username(command.connection)
+
+            elif command.operation == CONTACT_SEND:
+                ip_address, port = command.message.split(":")
+                Client(self.client_manager).connect_to_server(ip_address, port)
+
+        except Exception as ex:
+            print "Error while processing command:", ex
