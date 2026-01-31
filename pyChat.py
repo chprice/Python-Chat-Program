@@ -1,8 +1,4 @@
 import sys
-if not sys.hexversion > 0x03000000:
-    version = 2
-else:
-    version = 3
 if len(sys.argv) > 1 and sys.argv[1] == "-cli":
     print("Starting command line chat")
     isCLI = True
@@ -10,12 +6,8 @@ else:
     isCLI = False
 
 
-if version == 2:
-    from Tkinter import *
-    from tkFileDialog import asksaveasfilename
-if version == 3:
-    from tkinter import *
-    from tkinter.filedialog import asksaveasfilename
+from tkinter import *
+from tkinter.filedialog import asksaveasfilename
 import threading
 import socket
 import random
@@ -282,8 +274,6 @@ def options_sanitation(por, loc=""):
 
     """
     global root
-    if version == 2:
-        por = unicode(por)
     if isCLI:
         root = 0
     if not por.isdigit():
@@ -303,8 +293,6 @@ def ip_process(ipArray):
     if len(ipArray) != 4:
         return False
     for ip in ipArray:
-        if version == 2:
-            ip = unicode(ip)
         if not ip.isdigit():
             return False
         t = int(ip)
